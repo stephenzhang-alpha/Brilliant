@@ -1,10 +1,12 @@
-import { Lesson } from '../../types';
+import type { Lesson } from '../../types';
 
 const lesson: Lesson = {
   id: 'two-step-equations',
   title: 'Two-Step Equations',
   description: 'Solve equations that require two operations, combining what you\'ve learned.',
   prerequisiteIds: ['balancing-equations'],
+  strand: 'core',
+  mapPosition: { col: 3, row: 0 },
   xpReward: 100,
   steps: [
     {
@@ -13,7 +15,7 @@ const lesson: Lesson = {
       prompt: 'Two Steps to Solve',
       conceptText: 'Some equations need two steps to isolate the variable. For example, 2x + 3 = 11 requires you to first remove the +3 (subtract 3 from both sides), then divide by 2. The rule: undo addition/subtraction first, then undo multiplication/division.',
       hints: [],
-      feedbackMatrix: {},
+      remediation: {},
     },
     {
       id: 'twostep-drag-1',
@@ -25,7 +27,7 @@ const lesson: Lesson = {
         'Step 2: Divide both sides by 2: x = 8 ÷ 2 = 4.',
       ],
       validationRule: { type: 'exact', answer: 4 },
-      feedbackMatrix: {
+      remediation: {
         wrong_answer: 'Step 1: 2x + 3 = 11 → 2x = 8. Step 2: x = 8 ÷ 2 = 4.',
         sign_error: 'Check your signs when moving terms. +3 becomes -3 on the other side.',
         off_by_one: 'Close! Remember to divide by the coefficient after isolating the term.',
@@ -55,7 +57,7 @@ const lesson: Lesson = {
         'Divide by 3: x = 21 ÷ 3 = 7.',
       ],
       validationRule: { type: 'exact', answer: 7 },
-      feedbackMatrix: {
+      remediation: {
         wrong_answer: '3x - 5 = 16 → 3x = 21 → x = 7. Move the constant first, then divide.',
         sign_error: 'Moving -5 across makes it +5. So 3x = 16 + 5 = 21.',
         empty: 'Start by dragging the constant term.',
@@ -84,7 +86,7 @@ const lesson: Lesson = {
         'Divide both sides by 4: x = 4.',
       ],
       validationRule: { type: 'exact', answer: 4 },
-      feedbackMatrix: {
+      remediation: {
         wrong_answer: '4x + 2 = 18. Subtract 2: 4x = 16. Divide by 4: x = 4.',
         off_by_one: 'Almost! Check your division step.',
         sign_error: 'The answer should be positive here.',
@@ -100,7 +102,7 @@ const lesson: Lesson = {
       prompt: 'Two-step master!',
       synthesisText: 'You\'ve learned the two-step strategy: (1) undo addition or subtraction to isolate the variable term, then (2) undo multiplication or division to solve for the variable. This pattern works for any linear equation. Next up: visualizing these equations as lines on a graph!',
       hints: [],
-      feedbackMatrix: {},
+      remediation: {},
     },
   ],
 };

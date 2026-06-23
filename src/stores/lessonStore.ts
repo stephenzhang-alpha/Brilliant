@@ -68,7 +68,8 @@ export const useLessonStore = create<LessonState>((set, get) => ({
       feedback = step.synthesisText || 'Correct! Well done.';
     } else {
       const errorKey = getErrorKey(answer, step);
-      feedback = step.feedbackMatrix[errorKey] || step.hints[0] || 'Try again!';
+      const entry = step.remediation?.[errorKey] ?? step.remediation?.['wrong_answer'];
+      feedback = (typeof entry === 'string' ? entry : entry?.message) || step.hints?.[0] || 'Try again!';
     }
 
     set({

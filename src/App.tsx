@@ -25,8 +25,11 @@ export default function App() {
     }
   }, [user, loadProgress]);
 
+  // Matches Vite's `base` so routes work under GitHub Pages' /<repo>/ subpath.
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/';
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <Layout>
         <Routes>
           <Route path="/" element={<HomePage />} />

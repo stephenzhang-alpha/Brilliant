@@ -1,3 +1,9 @@
+// ---------------------------------------------------------------------------
+// Curriculum
+// ---------------------------------------------------------------------------
+
+export type StrandId = 'core' | 'visual' | 'patterns' | 'physics';
+
 export interface Lesson {
   id: string;
   title: string;
@@ -5,6 +11,12 @@ export interface Lesson {
   prerequisiteIds: string[];
   steps: LessonStep[];
   xpReward: number;
+  /** Which thematic learning path this lesson belongs to. */
+  strand: StrandId;
+  /** True for lessons that act as an independent starting point on the map. */
+  entryPoint?: boolean;
+  /** Optional explicit position on the 2D course map (column = depth, row = lane). */
+  mapPosition?: { col: number; row: number };
 }
 
 export interface LessonStep {
@@ -13,14 +25,25 @@ export interface LessonStep {
   interactionType?: InteractionType;
   prompt: string;
   conceptText?: string;
-  hints: string[];
+  hints?: string[];
   validationRule?: ValidationRule;
-  feedbackMatrix: Record<string, string>;
+  /**
+   * Maps a misconception id (see MisconceptionId) to a remediation. A bare
+   * string is treated as { kind: 'text' } for backwards compatibility.
+   */
+  remediation?: Record<string, Remediation | string>;
   synthesisText?: string;
   problemConfig?: ProblemConfig;
 }
 
-export type InteractionType = 'TERM_DRAG' | 'SCALE_BALANCE' | 'GRAPH_PLOT' | 'MULTIPLE_CHOICE' | 'NUMBER_INPUT';
+export type InteractionType =
+  | 'TERM_DRAG'
+  | 'BALANCE_SCALE'
+  | 'GRAPH_PLOT'
+  | 'NUMBER_INPUT'
+  | 'EXPRESSION_BUILDER'
+  | 'SLIDER_GRAPH'
+  | 'INTERSECTION_SCRUB';
 
 export interface ValidationRule {
   type: 'exact' | 'expression' | 'range' | 'custom';
@@ -28,12 +51,44 @@ export interface ValidationRule {
   tolerance?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Constructive-failure remediation
+// ---------------------------------------------------------------------------
+
+export type MisconceptionId =
+  | 'wrong_answer'
+  | 'empty'
+  | 'sign_error'
+  | 'off_by_one'
+  | 'slope_wrong'
+  | 'intercept_wrong'
+  | 'incomplete'
+  | 'asymmetric_op'
+  | 'cross_pan_move'
+  | 'needs_decomposition'
+  | 'uneven_division'
+  | 'wrong_inverse';
+
+export type MicroActivityId = 'number-line-hop' | 'rebuild-balance' | 'substitute-tile';
+export type VisualId = 'sign-flip' | 'balance-tip' | 'rise-run';
+
+export type Remediation =
+  | { kind: 'text'; message: string }
+  | { kind: 'microActivity'; activity: MicroActivityId; message: string; params?: Record<string, unknown> }
+  | { kind: 'visual'; visual: VisualId; message: string; params?: Record<string, unknown> };
+
+// ---------------------------------------------------------------------------
+// Problem configurations
+// ---------------------------------------------------------------------------
+
 export interface ProblemConfig {
   equation?: EquationConfig;
-  scale?: ScaleConfig;
+  balance?: BalanceConfig;
   graph?: GraphConfig;
-  choices?: ChoiceConfig;
   numberInput?: NumberInputConfig;
+  expressionBuilder?: ExpressionBuilderConfig;
+  sliderGraph?: SliderGraphConfig;
+  intersection?: IntersectionConfig;
 }
 
 export interface EquationConfig {
@@ -50,24 +105,25 @@ export interface Term {
   isConstant: boolean;
 }
 
-export interface ScaleConfig {
-  leftItems: ScaleItem[];
-  rightItems: ScaleItem[];
-  targetBalance: ScaleItem[];
-  availableOperations: ScaleOperation[];
+// --- Interactive balance scale ---------------------------------------------
+
+export interface BalanceTermSpec {
+  kind: 'const' | 'var';
+  /** const: numeric value; var: coefficient (expanded into that many x-chips). */
+  value: number;
+  name?: string;
 }
 
-export interface ScaleItem {
-  id: string;
-  label: string;
-  value: number;
-  isVariable?: boolean;
-}
-
-export interface ScaleOperation {
-  type: 'add' | 'subtract' | 'multiply' | 'divide';
-  value: number;
-  label: string;
+export interface BalanceConfig {
+  variable: string;
+  left: BalanceTermSpec[];
+  right: BalanceTermSpec[];
+  /** Chips the learner can drag IN from the bank. Defaults to +1 / -1 / x. */
+  palette?: BalanceTermSpec[];
+  /** Divide-both-sides tools to offer, e.g. [2]. */
+  divisors?: number[];
+  goalText?: string;
+  targetValue: number;
 }
 
 export interface GraphConfig {
@@ -78,15 +134,46 @@ export interface GraphConfig {
   snapToGrid: boolean;
 }
 
-export interface ChoiceConfig {
-  options: { id: string; text: string; isCorrect: boolean }[];
-}
-
 export interface NumberInputConfig {
   correctAnswer: number;
   tolerance?: number;
   placeholder?: string;
 }
+
+/** Drag-substitution module that replaces multiple choice. */
+export interface ExpressionBuilderConfig {
+  expression: Term[];
+  variable: string;
+  substituteValue: number;
+  answer: number;
+  maxValue?: number;
+}
+
+/** Spec Module 2: parametric y = mx + b explorer. */
+export interface SliderGraphConfig {
+  targetSlope: number;
+  targetIntercept: number;
+  xRange: [number, number];
+  yRange: [number, number];
+  slopeRange?: [number, number];
+  interceptRange?: [number, number];
+  step?: number;
+}
+
+/** Spec Module 3: dual-line constraint intersection scrub. */
+export interface IntersectionConfig {
+  lineA: { slope: number; intercept: number; label: string };
+  lineB: { slope: number; intercept: number; label: string };
+  xRange: [number, number];
+  yRange: [number, number];
+  answerX: number;
+  tolerance?: number;
+  unitLabel?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Progress / persistence
+// ---------------------------------------------------------------------------
 
 export interface UserProgress {
   odId: string;

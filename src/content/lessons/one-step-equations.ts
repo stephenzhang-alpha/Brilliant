@@ -1,10 +1,12 @@
-import { Lesson } from '../../types';
+import type { Lesson } from '../../types';
 
 const lesson: Lesson = {
   id: 'one-step-equations',
   title: 'One-Step Equations',
   description: 'Solve equations by performing one operation to isolate the variable.',
   prerequisiteIds: ['variables-and-expressions'],
+  strand: 'core',
+  mapPosition: { col: 1, row: 0 },
   xpReward: 75,
   steps: [
     {
@@ -13,7 +15,7 @@ const lesson: Lesson = {
       prompt: 'Solving an Equation',
       conceptText: 'Solving an equation means finding the value of the variable that makes both sides equal. To isolate the variable, we perform the inverse (opposite) operation on both sides. If something is added, we subtract it. If something is multiplied, we divide.',
       hints: [],
-      feedbackMatrix: {},
+      remediation: {},
     },
     {
       id: 'onestep-drag-1',
@@ -25,7 +27,7 @@ const lesson: Lesson = {
         'When a term crosses the equals sign, its sign flips: +5 becomes -5.',
       ],
       validationRule: { type: 'exact', answer: 7 },
-      feedbackMatrix: {
+      remediation: {
         wrong_answer: 'When you move +5 to the other side, it becomes -5. So x = 12 - 5.',
         sign_error: 'Remember: moving a term across the equals sign flips its sign!',
         incomplete: 'Drag the +5 term across the equals sign to the right side.',
@@ -55,7 +57,7 @@ const lesson: Lesson = {
         'When -3 crosses the equals sign, it becomes +3. So x = 10 + 3.',
       ],
       validationRule: { type: 'exact', answer: 13 },
-      feedbackMatrix: {
+      remediation: {
         wrong_answer: 'Moving -3 to the right makes it +3. So x = 10 + 3 = 13.',
         sign_error: 'When you move a negative term, it becomes positive on the other side.',
         empty: 'Drag the -3 term across the equals sign.',
@@ -84,7 +86,7 @@ const lesson: Lesson = {
         'x = 3 - 8. What is 3 - 8?',
       ],
       validationRule: { type: 'exact', answer: -5 },
-      feedbackMatrix: {
+      remediation: {
         wrong_answer: 'Move +8 across: x = 3 - 8 = -5. Negative answers are okay!',
         sign_error: 'The answer is negative here. 3 - 8 = -5.',
         empty: 'Drag the +8 to the other side.',
@@ -109,7 +111,7 @@ const lesson: Lesson = {
       prompt: 'Excellent!',
       synthesisText: 'You can solve one-step equations by moving terms across the equals sign. The key insight: whatever operation you undo on one side, you effectively apply the inverse on the other. This keeps the equation balanced. Next, we\'ll visualize this with a balance scale!',
       hints: [],
-      feedbackMatrix: {},
+      remediation: {},
     },
   ],
 };

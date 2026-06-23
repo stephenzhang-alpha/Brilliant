@@ -93,6 +93,23 @@ Each problem has a `feedbackMatrix` mapping error types to specific hints.
 
 ## Deployment
 
+### GitHub Pages (no backend required)
+
+Configured to deploy via GitHub Actions. The production build's base path is
+`/Brilliant/` (the repo name); override with the `VITE_BASE` env var if you rename
+the repo or add a custom domain.
+
+1. Commit and push to the `main` branch.
+2. In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. Ensure the repo is **Public** so others can open it.
+4. `.github/workflows/deploy.yml` builds and publishes automatically on each push.
+5. Live at: https://stephenzhang-alpha.github.io/Brilliant/
+
+When Firebase env vars are absent the app falls back to `localStorage`, so the
+public demo works for any visitor with zero setup (progress is per-browser).
+
+### Firebase Hosting (optional alternative)
+
 ```bash
 npm run build
 firebase deploy

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { LessonStep } from '../../types';
-import { MultipleChoice } from '../interactions/MultipleChoice';
+import type { LessonStep, Remediation } from '../../types';
 import { NumberInput } from '../interactions/NumberInput';
 import { TermDrag } from '../interactions/TermDrag';
-import { ScaleBalance } from '../interactions/ScaleBalance';
+import { InteractiveBalance } from '../interactions/InteractiveBalance/InteractiveBalance';
 import { GraphPlot } from '../interactions/GraphPlot';
+import { ExpressionBuilder } from '../interactions/ExpressionBuilder';
+import { SliderGraph } from '../interactions/SliderGraph';
+import { IntersectionScrub } from '../interactions/IntersectionScrub';
 import { FeedbackPanel } from './FeedbackPanel';
+import { RemediationHost } from './remediation/RemediationHost';
 
 interface Props {
   step: LessonStep;
@@ -13,13 +16,21 @@ interface Props {
   attempts: number;
 }
 
-export function StepRenderer({ step, onComplete, attempts }: Props) {
-  const [feedback, setFeedback] = useState<{ message: string; correct: boolean } | null>(null);
+function resolveRemediation(entry: Remediation | string | undefined): Remediation | undefined {
+  if (!entry) return undefined;
+  if (typeof entry === 'string') return { kind: 'text', message: entry };
+  return entry;
+}
+
+export function StepRenderer({ step, onComplete }: Props) {
+  const [remediation, setRemediation] = useState<Remediation | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [localAttempts, setLocalAttempts] = useState(0);
   const [answered, setAnswered] = useState(false);
 
   useEffect(() => {
-    setFeedback(null);
+    setRemediation(null);
+    setSuccessMessage(null);
     setLocalAttempts(0);
     setAnswered(false);
   }, [step.id]);
@@ -36,7 +47,8 @@ export function StepRenderer({ step, onComplete, attempts }: Props) {
       if (typeof rule.answer === 'object' && rule.answer !== null) {
         const target = rule.answer as { slope: number; intercept: number };
         const ans = answer as { slope: number; intercept: number };
-        correct = Math.abs(ans.slope - target.slope) < 0.2 && Math.abs(ans.intercept - target.intercept) < 0.5;
+        correct =
+          Math.abs(ans.slope - target.slope) < 0.2 && Math.abs(ans.intercept - target.intercept) < 0.5;
       } else {
         correct = String(answer) === String(rule.answer) || Number(answer) === Number(rule.answer);
       }
@@ -49,19 +61,20 @@ export function StepRenderer({ step, onComplete, attempts }: Props) {
     const newAttempts = localAttempts + 1;
     setLocalAttempts(newAttempts);
 
-    let message = '';
     if (correct) {
-      message = step.synthesisText || 'Correct!';
+      setSuccessMessage(step.synthesisText || 'Correct!');
+      setRemediation(null);
       setAnswered(true);
+      setTimeout(() => onComplete(true), 1200);
     } else {
       const errorKey = getErrorKey(answer, step);
-      message = step.feedbackMatrix[errorKey] || step.hints[0] || 'Try again!';
-    }
-
-    setFeedback({ message, correct });
-
-    if (correct) {
-      setTimeout(() => onComplete(true), 1200);
+      const resolved =
+        resolveRemediation(step.remediation?.[errorKey]) ??
+        resolveRemediation(step.remediation?.['wrong_answer']) ?? {
+          kind: 'text' as const,
+          message: step.hints?.[0] ?? 'Not quite — take another look and try again.',
+        };
+      setRemediation(resolved);
     }
   };
 
@@ -100,59 +113,49 @@ export function StepRenderer({ step, onComplete, attempts }: Props) {
 
   return (
     <div className="space-y-6">
-      {step.interactionType === 'MULTIPLE_CHOICE' && step.problemConfig?.choices && (
-        <MultipleChoice
-          config={step.problemConfig.choices}
-          onSubmit={(answer) => handleSubmit(answer)}
-          disabled={answered}
-        />
-      )}
-
       {step.interactionType === 'NUMBER_INPUT' && step.problemConfig?.numberInput && (
-        <NumberInput
-          config={step.problemConfig.numberInput}
-          onSubmit={(answer) => handleSubmit(answer)}
-          disabled={answered}
-        />
+        <NumberInput config={step.problemConfig.numberInput} onSubmit={handleSubmit} disabled={answered} />
       )}
 
       {step.interactionType === 'TERM_DRAG' && step.problemConfig?.equation && (
-        <TermDrag
-          config={step.problemConfig.equation}
-          onSubmit={(answer) => handleSubmit(answer)}
-          disabled={answered}
-        />
+        <TermDrag config={step.problemConfig.equation} onSubmit={handleSubmit} disabled={answered} />
       )}
 
-      {step.interactionType === 'SCALE_BALANCE' && step.problemConfig?.scale && (
-        <ScaleBalance
-          config={step.problemConfig.scale}
-          onSubmit={(answer) => handleSubmit(answer)}
+      {step.interactionType === 'BALANCE_SCALE' && step.problemConfig?.balance && (
+        <InteractiveBalance config={step.problemConfig.balance} onSubmit={handleSubmit} disabled={answered} />
+      )}
+
+      {step.interactionType === 'EXPRESSION_BUILDER' && step.problemConfig?.expressionBuilder && (
+        <ExpressionBuilder
+          config={step.problemConfig.expressionBuilder}
+          onSubmit={handleSubmit}
           disabled={answered}
         />
       )}
 
       {step.interactionType === 'GRAPH_PLOT' && step.problemConfig?.graph && (
-        <GraphPlot
-          config={step.problemConfig.graph}
-          onSubmit={(answer) => handleSubmit(answer)}
-          disabled={answered}
-        />
+        <GraphPlot config={step.problemConfig.graph} onSubmit={handleSubmit} disabled={answered} />
       )}
 
-      {feedback && (
-        <FeedbackPanel
-          message={feedback.message}
-          isCorrect={feedback.correct}
-          showHint={localAttempts >= 1 && !feedback.correct}
-          showDetailedHint={localAttempts >= 2 && !feedback.correct}
-          hints={step.hints}
-        />
+      {step.interactionType === 'SLIDER_GRAPH' && step.problemConfig?.sliderGraph && (
+        <SliderGraph config={step.problemConfig.sliderGraph} onSubmit={handleSubmit} disabled={answered} />
       )}
 
-      {!answered && feedback && !feedback.correct && (
+      {step.interactionType === 'INTERSECTION_SCRUB' && step.problemConfig?.intersection && (
+        <IntersectionScrub config={step.problemConfig.intersection} onSubmit={handleSubmit} disabled={answered} />
+      )}
+
+      {successMessage && (
+        <FeedbackPanel message={successMessage} isCorrect={true} showHint={false} showDetailedHint={false} hints={[]} />
+      )}
+
+      {remediation && !answered && (
+        <RemediationHost remediation={remediation} hints={step.hints} attempts={localAttempts} />
+      )}
+
+      {remediation && !answered && (
         <button
-          onClick={() => setFeedback(null)}
+          onClick={() => setRemediation(null)}
           className="w-full border border-white/20 hover:border-white/40 text-text-muted font-medium py-2.5 rounded-xl transition-colors text-sm"
         >
           Try Again
