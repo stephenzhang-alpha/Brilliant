@@ -28,11 +28,15 @@ export function useBalanceDrag({ onDrop, getZoneRects, disabled }: Options) {
   const [hoverZone, setHoverZone] = useState<DropZone | null>(null);
 
   const onDropRef = useRef(onDrop);
-  onDropRef.current = onDrop;
   const getRectsRef = useRef(getZoneRects);
-  getRectsRef.current = getZoneRects;
   const dragRef = useRef<DragChip | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+
+  // Keep the latest callbacks in refs (updated post-render, never during render).
+  useEffect(() => {
+    onDropRef.current = onDrop;
+    getRectsRef.current = getZoneRects;
+  });
 
   const start = useCallback(
     (e: React.PointerEvent, chip: DragChip) => {

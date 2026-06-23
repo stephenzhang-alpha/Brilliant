@@ -24,7 +24,17 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build (inject Firebase web config)
+        run: npm run build
+        env:
+          # Firebase web config is public-by-design (it ships in the client bundle),
+          # so inlining is safe. Define matching repo secrets to override any value.
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY || 'AIzaSyDcO54Ym6r2e9GvnpNYM0O-x-1yxamOoGU' }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN || 'brilliant-1d239.firebaseapp.com' }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID || 'brilliant-1d239' }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET || 'brilliant-1d239.firebasestorage.app' }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID || '768873161259' }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID || '1:768873161259:web:4d53b8e37c7f335c3ec06e' }}
       # SPA fallback: serve index.html for deep links like /Brilliant/lesson/x
       - name: Add 404 fallback
         run: cp dist/index.html dist/404.html

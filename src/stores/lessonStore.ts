@@ -63,7 +63,7 @@ export const useLessonStore = create<LessonState>((set, get) => ({
     const correct = validateAnswer(answer, step.validationRule);
     const newAttempts = attempts + 1;
 
-    let feedback = '';
+    let feedback: string;
     if (correct) {
       feedback = step.synthesisText || 'Correct! Well done.';
     } else {

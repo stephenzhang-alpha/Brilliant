@@ -10,5 +10,5 @@ export function LessonPage() {
   const lesson = getLessonById(lessonId);
   if (!lesson) return <Navigate to="/course" replace />;
 
-  return <LessonRenderer lesson={lesson} />;
+  return <LessonRenderer key={lesson.id} lesson={lesson} />;
 }

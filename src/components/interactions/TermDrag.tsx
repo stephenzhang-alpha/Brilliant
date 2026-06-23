@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { EquationConfig, Term } from '../../types';
 
 interface Props {
@@ -22,6 +22,12 @@ interface DragMeta {
   h: number;
 }
 
+const SNAP_KEYFRAMES: Keyframe[] = [
+  { transform: 'scale(0.7)', opacity: 0 },
+  { transform: 'scale(1.12)', opacity: 1, offset: 0.7 },
+  { transform: 'scale(1)', opacity: 1 },
+];
+
 export function TermDrag({ config, onSubmit, disabled }: Props) {
   const [leftTerms, setLeftTerms] = useState<Term[]>(config.left);
   const [rightTerms, setRightTerms] = useState<Term[]>(config.right);
@@ -29,7 +35,6 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [crossed, setCrossed] = useState(false);
   const [struggle, setStruggle] = useState<string | null>(null);
-  const [justMovedId, setJustMovedId] = useState<string | null>(null);
 
   const equalsRef = useRef<HTMLDivElement>(null);
   const ghostPosRef = useRef<HTMLDivElement>(null);
@@ -42,14 +47,7 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
   const raf = useRef(0);
   const struggleTimer = useRef(0);
 
-  useEffect(() => {
-    setLeftTerms(config.left);
-    setRightTerms(config.right);
-    setSolved(false);
-    setDragId(null);
-    setCrossed(false);
-  }, [config]);
-
+  // Tear down any in-flight animation frame / timer on unmount.
   useEffect(
     () => () => {
       cancelAnimationFrame(raf.current);
@@ -57,21 +55,6 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
     },
     [],
   );
-
-  // Animate a term snapping into its new home after it crosses the =.
-  useEffect(() => {
-    if (!justMovedId) return;
-    const el = termRefs.current.get(justMovedId);
-    el?.animate(
-      [
-        { transform: 'scale(0.7)', opacity: 0 },
-        { transform: 'scale(1.12)', opacity: 1, offset: 0.7 },
-        { transform: 'scale(1)', opacity: 1 },
-      ],
-      { duration: 220, easing: 'cubic-bezier(.34,1.56,.64,1)' },
-    );
-    setJustMovedId(null);
-  }, [justMovedId, leftTerms, rightTerms]);
 
   const flash = (msg: string) => {
     setStruggle(msg);
@@ -91,7 +74,7 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
 
   // 60fps loop: drives the ghost position + the rubber-band stretch on the "="
   // entirely through refs (no per-frame React state) to stay well under 16ms.
-  const tick = useCallback(() => {
+  function tick() {
     const meta = dragMeta.current;
     const eq = equalsRef.current;
     if (meta && eq) {
@@ -125,12 +108,12 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
       }
     }
     raf.current = requestAnimationFrame(tick);
-  }, []);
+  }
 
-  const onMove = useCallback((e: PointerEvent) => {
+  function onMove(e: PointerEvent) {
     e.preventDefault();
     pointer.current = { x: e.clientX, y: e.clientY };
-  }, []);
+  }
 
   const commitMove = (meta: DragMeta) => {
     const flipped: Term = { ...meta.term, coefficient: -meta.term.coefficient };
@@ -141,10 +124,16 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
       setRightTerms((prev) => prev.filter((t) => t.id !== meta.term.id));
       setLeftTerms((prev) => [...prev, flipped]);
     }
-    setJustMovedId(meta.term.id);
+    // Snap-in animation once the term has re-rendered on its new side.
+    const movedId = meta.term.id;
+    requestAnimationFrame(() => {
+      termRefs.current
+        .get(movedId)
+        ?.animate(SNAP_KEYFRAMES, { duration: 220, easing: 'cubic-bezier(.34,1.56,.64,1)' });
+    });
   };
 
-  const onUp = useCallback(() => {
+  function onUp() {
     cancelAnimationFrame(raf.current);
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
@@ -162,8 +151,7 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
         commitMove(meta);
       } else {
         const dist = Math.abs(pointer.current.x - equalsCenterX());
-        const homeEl = termRefs.current.get(meta.term.id);
-        homeEl?.animate(
+        termRefs.current.get(meta.term.id)?.animate(
           [
             { transform: 'translateX(0)' },
             { transform: 'translateX(-7px)' },
@@ -185,8 +173,7 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
     crossedRef.current = false;
     setDragId(null);
     setCrossed(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onMove]);
+  }
 
   const onTermPointerDown = (e: React.PointerEvent, term: Term, side: Side) => {
     if (disabled || solved) return;
@@ -196,12 +183,7 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
     }
     e.preventDefault();
     const rect = termRefs.current.get(term.id)?.getBoundingClientRect();
-    dragMeta.current = {
-      term,
-      fromSide: side,
-      w: rect?.width ?? 48,
-      h: rect?.height ?? 40,
-    };
+    dragMeta.current = { term, fromSide: side, w: rect?.width ?? 48, h: rect?.height ?? 40 };
     pointer.current = { x: e.clientX, y: e.clientY };
     crossedRef.current = false;
     setDragId(term.id);
@@ -226,9 +208,10 @@ export function TermDrag({ config, onSubmit, disabled }: Props) {
   };
 
   const ghostLabel = (): string => {
-    const m = dragMeta.current;
-    if (!m) return '';
-    const c = crossed ? -m.term.coefficient : m.term.coefficient;
+    if (!dragId) return '';
+    const term = [...leftTerms, ...rightTerms].find((t) => t.id === dragId);
+    if (!term) return '';
+    const c = crossed ? -term.coefficient : term.coefficient;
     return `${c < 0 ? '−' : '+'}${Math.abs(c)}`;
   };
 

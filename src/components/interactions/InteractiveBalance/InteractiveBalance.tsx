@@ -49,27 +49,19 @@ export function InteractiveBalance({ config, onSubmit, disabled }: Props) {
   const [displayTilt, setDisplayTilt] = useState(0);
 
   const stateRef = useRef(state);
-  stateRef.current = state;
   const solvedRef = useRef(false);
   const tiltCurrent = useRef(0);
+
+  // Keep the latest state in a ref for event handlers (updated post-render).
+  useEffect(() => {
+    stateRef.current = state;
+  });
 
   const leftEl = useRef<HTMLDivElement | null>(null);
   const rightEl = useRef<HTMLDivElement | null>(null);
   const bankEl = useRef<HTMLDivElement | null>(null);
 
   const palette = config.palette ?? DEFAULT_PALETTE;
-
-  // Rebuild whenever the problem changes.
-  useEffect(() => {
-    const fresh = buildInitialState(config);
-    setState(fresh);
-    setPast([]);
-    setEvent(null);
-    setPending(null);
-    setMoves([]);
-    setSolved(false);
-    solvedRef.current = false;
-  }, [config]);
 
   // Animate the beam toward the true (hidden-solution) tilt.
   useEffect(() => {

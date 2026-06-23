@@ -13,11 +13,6 @@ export function GraphPlot({ config, onSubmit, disabled }: Props) {
   const [point2, setPoint2] = useState({ x: 2, y: config.targetIntercept + config.targetSlope * 2 + 1 });
   const [dragging, setDragging] = useState<'p1' | 'p2' | null>(null);
 
-  useEffect(() => {
-    setPoint1({ x: 0, y: config.targetIntercept });
-    setPoint2({ x: 2, y: config.targetIntercept + config.targetSlope * 2 + 1 });
-  }, [config.targetSlope, config.targetIntercept]);
-
   const viewSize = 300;
   const padding = 30;
   const graphSize = viewSize - padding * 2;
@@ -83,6 +78,7 @@ export function GraphPlot({ config, onSubmit, disabled }: Props) {
       document.removeEventListener('touchmove', handleMove);
       document.removeEventListener('touchend', handleUp);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragging, xMin, xMax, yMin, yMax]);
 
   const handleSubmit = () => {

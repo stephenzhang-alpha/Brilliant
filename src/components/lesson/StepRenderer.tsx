@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { LessonStep, Remediation } from '../../types';
 import { NumberInput } from '../interactions/NumberInput';
 import { TermDrag } from '../interactions/TermDrag';
@@ -27,13 +27,6 @@ export function StepRenderer({ step, onComplete }: Props) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [localAttempts, setLocalAttempts] = useState(0);
   const [answered, setAnswered] = useState(false);
-
-  useEffect(() => {
-    setRemediation(null);
-    setSuccessMessage(null);
-    setLocalAttempts(0);
-    setAnswered(false);
-  }, [step.id]);
 
   const handleSubmit = (answer: unknown) => {
     if (answered) return;

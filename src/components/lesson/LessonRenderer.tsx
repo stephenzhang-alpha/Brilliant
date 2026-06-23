@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lesson } from '../../types';
 import { StepRenderer } from './StepRenderer';
@@ -21,11 +21,6 @@ export function LessonRenderer({ lesson }: Props) {
   const [currentStepIndex, setCurrentStepIndex] = useState(startStep);
   const [attempts, setAttempts] = useState(0);
   const [showCompletion, setShowCompletion] = useState(false);
-
-  useEffect(() => {
-    setCurrentStepIndex(startStep);
-    setShowCompletion(false);
-  }, [lesson.id, startStep]);
 
   const currentStep = lesson.steps[currentStepIndex];
   const totalSteps = lesson.steps.length;
@@ -104,6 +99,7 @@ export function LessonRenderer({ lesson }: Props) {
 
       {/* Step content */}
       <StepRenderer
+        key={currentStep.id}
         step={currentStep}
         onComplete={handleStepComplete}
         attempts={attempts}
