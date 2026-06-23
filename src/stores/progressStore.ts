@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, isFirebaseConfigured } from '../firebase/config';
 import { UserProgress, LessonProgress, StreakData } from '../types';
 
 function getTodayStr(): string {
@@ -17,6 +17,15 @@ function calculateStreak(lastDate: string, currentStreak: number): number {
 
   if (lastDate === yesterdayStr) return currentStreak + 1;
   return 1;
+}
+
+function loadFromLocal(userId: string): UserProgress | null {
+  const raw = localStorage.getItem(`eq_progress_${userId}`);
+  return raw ? JSON.parse(raw) : null;
+}
+
+function saveToLocal(userId: string, progress: UserProgress) {
+  localStorage.setItem(`eq_progress_${userId}`, JSON.stringify(progress));
 }
 
 interface ProgressState {
@@ -46,41 +55,48 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
 
   loadProgress: async (userId: string) => {
     set({ loading: true });
+
+    const makeInitial = (): UserProgress => ({
+      odId: userId,
+      lessonProgress: {},
+      streak: defaultStreak,
+      totalXp: 0,
+      lastActiveDate: '',
+    });
+
+    if (!isFirebaseConfigured) {
+      const local = loadFromLocal(userId);
+      set({ progress: local || makeInitial(), loading: false });
+      return;
+    }
+
     try {
-      const docRef = doc(db, 'userProgress', userId);
+      const docRef = doc(db!, 'userProgress', userId);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         set({ progress: docSnap.data() as UserProgress, loading: false });
       } else {
-        const initial: UserProgress = {
-          odId: userId,
-          lessonProgress: {},
-          streak: defaultStreak,
-          totalXp: 0,
-          lastActiveDate: '',
-        };
-        set({ progress: initial, loading: false });
+        set({ progress: makeInitial(), loading: false });
       }
     } catch {
-      const initial: UserProgress = {
-        odId: userId,
-        lessonProgress: {},
-        streak: defaultStreak,
-        totalXp: 0,
-        lastActiveDate: '',
-      };
-      set({ progress: initial, loading: false });
+      const local = loadFromLocal(userId);
+      set({ progress: local || makeInitial(), loading: false });
     }
   },
 
   saveProgress: async (userId: string) => {
     const { progress } = get();
     if (!progress) return;
+
+    saveToLocal(userId, progress);
+
+    if (!isFirebaseConfigured) return;
+
     try {
-      const docRef = doc(db, 'userProgress', userId);
+      const docRef = doc(db!, 'userProgress', userId);
       await setDoc(docRef, progress);
     } catch {
-      // Silent fail -- will retry on next save
+      // Saved to localStorage as fallback
     }
   },
 
@@ -178,7 +194,7 @@ export const useProgressStore = create<ProgressState>((set, get) => ({
     return progress?.lessonProgress[lessonId]?.completed ?? false;
   },
 
-  isLessonUnlocked: (lessonId: string, prerequisites: string[]) => {
+  isLessonUnlocked: (_lessonId: string, prerequisites: string[]) => {
     const { progress } = get();
     if (!progress) return prerequisites.length === 0;
     if (prerequisites.length === 0) return true;
