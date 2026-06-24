@@ -9,10 +9,13 @@
 // ---------------------------------------------------------------------------
 
 export const WORLD_WIDTH = 600;
-export const WORLD_HEIGHT = 160;
+// Taller scene (more sky) so the runner fills an immersive full-page stage
+// instead of reading as a thin horizontal band. The ground keeps the same
+// distance from the bottom, so the extra height is all sky above the action.
+export const WORLD_HEIGHT = 300;
 
 /** Y of the ground line — sprites rest their feet here. */
-export const GROUND_Y = 128;
+export const GROUND_Y = 268;
 
 // --- Dino -----------------------------------------------------------------
 export const DINO_X = 30;

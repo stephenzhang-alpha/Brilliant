@@ -51,65 +51,63 @@ export function drawDino(
     return;
   }
 
-  // --- Tail (steps pointing back-left) ---
-  rect(ctx, x + 0, y + 18, 6, 5);
-  rect(ctx, x + 3, y + 13, 8, 6);
+  // A simpler, more iconic silhouette: a chunky tail, one solid body, a big
+  // head with a single eye, a stubby arm, and two simple legs.
 
-  // --- Back / neck ramp up to the head ---
-  rect(ctx, x + 8, y + 11, 22, 8);
+  // Tail (one stubby block pointing back-left)
+  rect(ctx, x + 0, y + 22, 13, 6);
 
-  // --- Body mass ---
-  rect(ctx, x + 12, y + 16, 22, 17);
-  rect(ctx, x + 16, y + 31, 15, 7);
+  // Body / back — a single solid mass
+  rect(ctx, x + 10, y + 13, 22, 21);
+  rect(ctx, x + 14, y + 32, 13, 6); // belly
 
-  // --- Little arm ---
-  rect(ctx, x + 30, y + 25, 7, 4);
-
-  // --- Head ---
+  // Neck + big head (top-right)
+  rect(ctx, x + 22, y + 9, 9, 8);
   rect(ctx, x + 26, y + 0, 18, 15);
-  rect(ctx, x + 26, y + 15, 13, 4); // jaw
-  // Mouth slot (carved out of the jaw)
+
+  // Mouth line + tiny arm (carve / add)
   ctx.fillStyle = bg;
-  rect(ctx, x + 31, y + 15, 7, 2);
+  rect(ctx, x + 31, y + 12, 11, 2); // mouth
+  ctx.fillStyle = fg;
+  rect(ctx, x + 30, y + 21, 6, 3); // arm
+
   // Eye
-  ctx.fillStyle = pose === 'dead' ? fg : bg;
   if (pose === 'dead') {
-    // little "x" eye
-    rect(ctx, x + 36, y + 4, 5, 1);
-    rect(ctx, x + 36, y + 6, 5, 1);
-    rect(ctx, x + 38, y + 5, 1, 1);
+    ctx.fillStyle = bg;
+    rect(ctx, x + 35, y + 3, 6, 6);
+    ctx.fillStyle = fg;
+    rect(ctx, x + 36, y + 4, 4, 1);
+    rect(ctx, x + 36, y + 6, 4, 1);
   } else {
+    ctx.fillStyle = bg;
     rect(ctx, x + 37, y + 4, 3, 3);
   }
   ctx.fillStyle = fg;
 
-  // --- Legs ---
-  const step = Math.floor(tick / 6) % 2; // toggle every 6 ticks
+  // Legs — two stubby legs; run alternates one up / one down.
+  const downLeg = (lx: number) => {
+    rect(ctx, lx, y + 38, 7, 9);
+    rect(ctx, lx - 1, y + 45, 9, 2);
+  };
+  const upLeg = (lx: number) => {
+    rect(ctx, lx, y + 38, 7, 5);
+    rect(ctx, lx - 1, y + 41, 9, 2);
+  };
+  const step = Math.floor(tick / 6) % 2;
   if (pose === 'run') {
     if (step === 0) {
-      // left planted, right lifted
-      rect(ctx, x + 15, y + 38, 6, 9);
-      rect(ctx, x + 14, y + 45, 8, 2);
-      rect(ctx, x + 27, y + 38, 6, 5);
-      rect(ctx, x + 27, y + 41, 8, 2);
+      downLeg(x + 13);
+      upLeg(x + 26);
     } else {
-      // right planted, left lifted
-      rect(ctx, x + 27, y + 38, 6, 9);
-      rect(ctx, x + 27, y + 45, 8, 2);
-      rect(ctx, x + 15, y + 38, 6, 5);
-      rect(ctx, x + 14, y + 41, 8, 2);
+      upLeg(x + 13);
+      downLeg(x + 26);
     }
   } else if (pose === 'jump') {
-    rect(ctx, x + 15, y + 38, 6, 7);
-    rect(ctx, x + 14, y + 44, 8, 2);
-    rect(ctx, x + 27, y + 38, 6, 7);
-    rect(ctx, x + 27, y + 44, 8, 2);
+    rect(ctx, x + 13, y + 38, 7, 6);
+    rect(ctx, x + 26, y + 38, 7, 6);
   } else {
-    // idle / dead — both legs planted
-    rect(ctx, x + 15, y + 38, 6, 9);
-    rect(ctx, x + 14, y + 45, 8, 2);
-    rect(ctx, x + 27, y + 38, 6, 9);
-    rect(ctx, x + 27, y + 45, 8, 2);
+    downLeg(x + 13);
+    downLeg(x + 26);
   }
 }
 

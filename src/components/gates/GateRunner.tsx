@@ -132,7 +132,9 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →' }: Props) 
             <div className="bg-black/55 backdrop-blur-sm rounded-2xl px-6 py-5">
               <p className="text-white font-extrabold text-2xl">Gate Runner</p>
               <p className="text-white/85 mt-2">
-                Steer through the gates to grow your crowd as big as you can!
+                You start as the variable <b>x</b>. Pick an <b>assignment gate</b> to give x a value,
+                grow it through <b>+</b> and <b>×</b> gates, dodge the <b>red enemies</b> that subtract,
+                then beat the <b>boss</b> at the end!
               </p>
               <p className="text-white/70 text-sm mt-3">Drag, or use ← → · Tap to start</p>
             </div>

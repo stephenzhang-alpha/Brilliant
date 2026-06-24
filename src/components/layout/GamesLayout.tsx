@@ -34,6 +34,10 @@ export function GamesLayout({ children }: { children: ReactNode }) {
     navigate('/');
   };
 
+  // Game routes render full-screen immersive (GameShell supplies its own slim
+  // floating bar), so the standard site nav is hidden there.
+  const isGameRoute = pathname === '/' || pathname === '/gates' || pathname === '/tower';
+
   const navLink = (to: string, label: string, locked = false) => {
     const active = pathname === to;
     return (
@@ -56,6 +60,7 @@ export function GamesLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {!isGameRoute && (
       <nav className="bg-surface/85 backdrop-blur-md border-b-2 border-primary/15 sticky top-0 z-50 shadow-[0_4px_20px_-8px_rgba(124,58,237,0.35)]">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -117,6 +122,7 @@ export function GamesLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </nav>
+      )}
 
       {justUnlocked && (
         <button
@@ -133,11 +139,15 @@ export function GamesLayout({ children }: { children: ReactNode }) {
         </button>
       )}
 
-      <main className="flex-1">
-        <div key={pathname} className="animate-fadein">
-          {children}
-        </div>
-      </main>
+      {isGameRoute ? (
+        children
+      ) : (
+        <main className="flex-1">
+          <div key={pathname} className="animate-fadein">
+            {children}
+          </div>
+        </main>
+      )}
     </div>
   );
 }

@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOverallStore } from '../stores/overallStore';
 import { LockedLesson } from '../components/LockedLesson';
+import { GameShell } from '../components/GameShell';
+
+const TOWER_BG = 'linear-gradient(180deg, #312e81 0%, #6d28d9 55%, #a21caf 100%)';
 
 /**
- * The third game in the journey: "Algebra Tower Battler" (equations &
- * inequalities). The verified game lives as a self-contained file in /public
- * and is embedded here in a same-origin frame. A small postMessage bridge
- * reports its rendered height (for seamless sizing) and the final hero power
- * when the Dragon is defeated, which we add to the shared overall score.
+ * Stage 3: "Algebra Tower Battler" (equations & inequalities). The self-contained
+ * game lives in /public and is embedded here in a same-origin frame that fills the
+ * immersive stage. A small postMessage bridge banks the hero's final power into the
+ * shared overall score when the tower is conquered.
  */
 export function TowerPage() {
   const navigate = useNavigate();
@@ -29,17 +31,8 @@ export function TowerPage() {
       const data = e.data;
       if (!data || typeof data !== 'object') return;
 
-      if (data.type === 'atb:height' && typeof data.height === 'number' && frameRef.current) {
-        // Only resize on a meaningful change (no perpetual +N) to avoid a
-        // resize feedback loop with the iframe's ResizeObserver.
-        const h = Math.max(560, Math.round(data.height));
-        if (Math.abs(h - frameRef.current.clientHeight) > 2) {
-          frameRef.current.style.height = `${h}px`;
-        }
-      } else if (data.type === 'atb:victory' && typeof data.power === 'number') {
-        // Defeating the Dragon contributes the hero's final power — but only once
-        // per run (guards against duplicate victory messages double-banking).
-        if (bankedRef.current) return;
+      if (data.type === 'atb:victory' && typeof data.power === 'number') {
+        if (bankedRef.current) return; // guard duplicate victory messages
         bankedRef.current = true;
         add(data.power, 'tower');
         setResult(data.power);
@@ -54,56 +47,49 @@ export function TowerPage() {
 
   if (!towerUnlocked) {
     return (
-      <LockedLesson
-        lessonLabel="Stage 3 · Equations & Inequalities"
-        title="Algebra Tower is locked"
-        requirement="Finish the Gate Runner (Stage 2) to unlock the Tower battle."
-        ctaLabel={gatesUnlocked ? '→ Play Gate Runner' : '▶ Play Dino Runner'}
-        ctaTo={gatesUnlocked ? '/gates' : '/'}
-      />
+      <GameShell bg={TOWER_BG} maxWidth={520}>
+        <LockedLesson
+          lessonLabel="Stage 3 · Equations & Inequalities"
+          title="Algebra Tower is locked"
+          requirement="Finish the Gate Runner (Stage 2) to unlock the Tower battle."
+          ctaLabel={gatesUnlocked ? '→ Play Gate Runner' : '▶ Play Dino Runner'}
+          ctaTo={gatesUnlocked ? '/gates' : '/'}
+        />
+      </GameShell>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8 sm:py-10">
-      <div className="text-center mb-5">
-        <p className="text-xs font-bold tracking-[0.25em] text-text-muted uppercase">
-          Stage 3 · Equations &amp; Inequalities
-        </p>
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight mt-1">
-          Algebra <span className="text-primary">Tower Battler</span>
-        </h1>
-        <p className="text-text-muted mt-2 max-w-xl mx-auto">
-          Solve gate equations, evaluate enemy expressions, and win each battle by proving an
-          inequality. Beat the Dragon to bank your hero power into your total score.
-        </p>
+    <GameShell bg={TOWER_BG} maxWidth={1100}>
+      <div className="relative w-full">
+        <iframe
+          ref={frameRef}
+          src={src}
+          title="Algebra Tower Battler"
+          className="w-full block rounded-2xl border-2 border-white/15 shadow-2xl bg-[#1b1640]"
+          style={{ height: 'calc(100dvh - 5.5rem)' }}
+        />
+
+        {result !== null && (
+          <div className="absolute inset-0 flex items-center justify-center px-4">
+            <div className="bg-white rounded-2xl p-6 text-center shadow-2xl max-w-sm">
+              <p className="text-3xl">🏆</p>
+              <p className="font-display font-extrabold text-xl mt-1">Tower conquered!</p>
+              <p className="text-text-muted text-sm mt-1">
+                You banked <span className="font-bold text-success">+{result.toLocaleString()}</span> hero
+                power into your total (now{' '}
+                <span className="font-bold text-primary">{overall.toLocaleString()}</span>).
+              </p>
+              <button
+                onClick={() => navigate('/')}
+                className="mt-4 bg-primary hover:bg-primary-dark text-white font-bold px-7 py-3 rounded-xl transition-colors"
+              >
+                Next → Back to Dino Runner
+              </button>
+            </div>
+          </div>
+        )}
       </div>
-
-      {result !== null && (
-        <div className="mb-5 bg-success/10 border border-success/40 rounded-2xl p-5 text-center shadow-sm">
-          <p className="text-2xl">🏆</p>
-          <p className="font-bold text-lg mt-1">Tower conquered!</p>
-          <p className="text-text-muted text-sm mt-1">
-            You banked <span className="font-bold text-success">+{result.toLocaleString()}</span> hero
-            power into your total score (now{' '}
-            <span className="font-bold text-primary">{overall.toLocaleString()}</span>).
-          </p>
-          <button
-            onClick={() => navigate('/')}
-            className="mt-4 bg-primary hover:bg-primary-dark text-white font-bold px-7 py-3 rounded-xl transition-colors"
-          >
-            Next → Back to Dino Runner
-          </button>
-        </div>
-      )}
-
-      <iframe
-        ref={frameRef}
-        src={src}
-        title="Algebra Tower Battler"
-        className="w-full rounded-2xl border-2 border-primary/15 shadow-2xl bg-surface-light"
-        style={{ height: 860 }}
-      />
-    </div>
+    </GameShell>
   );
 }

@@ -1,54 +1,57 @@
 // ---------------------------------------------------------------------------
-// Gate Runner — engine
+// Gate Runner — engine (v2)
 //
-// A colourful "math gates" runner of the kind that shows up constantly in
-// mobile-game ads: a crowd runs forward, the player steers left/right to pass
-// through one of two gates, and each gate applies a math operation (×, +, −, ÷)
-// to the crowd size. Clear all the gate rows and cross the finish line to win.
+// A "math gates" runner in the mobile-ad style, re-themed around variables:
+//   • You begin as the variable x (an unknown value).
+//   • An ASSIGNMENT gate gives x a concrete value (x = 5 / x = 9 …).
+//   • OPERATION gates then transform your value (+n, ×n).
+//   • ENEMY lanes subtract from your value — steer around them.
+//   • A FINAL BOSS at the end fights your crowd; the survivors are your score.
 //
-// Same contract as the Dino engine: the React layer runs the rAF loop and calls
-// update(dt) + draw(ctx), forwards input, and reads the public status/count.
+// Scoring is tuned so a strong run lands in the few-hundreds and breaking 1000
+// is genuinely hard. Same contract as before: the React layer runs the rAF
+// loop, calls update(dt) + draw(ctx), forwards input, and reads status/count.
 // ---------------------------------------------------------------------------
 
 export type GateStatus = 'ready' | 'running' | 'complete';
-export type OpKind = '+' | 'x' | '-' | '/';
+export type ChoiceKind = 'assign' | 'add' | 'mul' | 'enemy';
 
-interface Op {
-  kind: OpKind;
+interface Choice {
+  kind: ChoiceKind;
   val: number;
   color: string;
   label: string;
 }
 interface GateRow {
   y: number;
-  left: Op;
-  right: Op;
+  left: Choice;
+  right: Choice;
   applied: boolean;
-  flash: number; // brief highlight after being passed
+  flash: number;
 }
 
 export const GW = 430;
 export const GH = 640;
 
-const PLAYER_Y = GH - 110;
+const PLAYER_Y = GH - 120;
 const TRACK_MARGIN = 26;
 const TRACK_LEFT = TRACK_MARGIN;
 const TRACK_RIGHT = GW - TRACK_MARGIN;
 const CENTER = GW / 2;
-const GATE_H = 66;
+const GATE_H = 70;
 
-const SPEED = 188; // px/s downward scroll
-const ROW_GAP = 232;
-const NUM_ROWS = 9;
-const KEY_SPEED = 540;
-const START_COUNT = 1;
-const DOT_CAP = 60;
+const SPEED = 196; // px/s downward scroll
+const ROW_GAP = 220;
+const NUM_ROWS = 11; // row 0 = assignment, then ops / enemies
+const KEY_SPEED = 560;
+const DOT_CAP = 80;
 
-const COLORS = {
-  add: '#22c55e',
-  mul: '#06b6d4',
-  sub: '#ef4444',
-  div: '#f59e0b',
+const C = {
+  assign: '#7c3aed', // violet — variable assignment
+  add: '#22c55e', // green
+  mul: '#3b82f6', // blue
+  enemy: '#ef4444', // red — subtracts
+  boss: '#b91c1c',
 };
 const CROWD_COLORS = ['#fbbf24', '#ec4899', '#22c55e', '#06b6d4', '#8b5cf6', '#fb5b6b'];
 
@@ -58,42 +61,64 @@ function rand(min: number, max: number): number {
 function randInt(min: number, max: number): number {
   return Math.floor(rand(min, max + 1));
 }
-
-function makeOp(): Op {
-  const r = Math.random();
-  if (r < 0.4) {
-    const val = randInt(8, 30);
-    return { kind: '+', val, color: COLORS.add, label: `+${val}` };
-  } else if (r < 0.68) {
-    const val = randInt(2, 3);
-    return { kind: 'x', val, color: COLORS.mul, label: `×${val}` };
-  } else if (r < 0.86) {
-    const val = randInt(5, 18);
-    return { kind: '-', val, color: COLORS.sub, label: `−${val}` };
-  }
-  const val = 2;
-  return { kind: '/', val, color: COLORS.div, label: `÷${val}` };
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function makeRow(y: number): GateRow {
-  const left = makeOp();
-  let right = makeOp();
-  // Avoid two identical gates so there's always a real choice.
-  let guard = 0;
-  while (right.label === left.label && guard++ < 6) right = makeOp();
+function assignChoice(val: number): Choice {
+  return { kind: 'assign', val, color: C.assign, label: `x = ${val}` };
+}
+function addChoice(val: number): Choice {
+  return { kind: 'add', val, color: C.add, label: `+${val}` };
+}
+function mulChoice(val: number): Choice {
+  return { kind: 'mul', val, color: C.mul, label: `×${val}` };
+}
+function enemyChoice(val: number): Choice {
+  return { kind: 'enemy', val, color: C.enemy, label: `−${val}` };
+}
+
+/** Build one row given its index (0 = assignment row). */
+function makeRow(index: number, y: number): GateRow {
+  if (index === 0) {
+    // Assignment: two starting values for x.
+    const a = randInt(4, 7);
+    const b = a + randInt(2, 4);
+    return Math.random() < 0.5
+      ? { y, left: assignChoice(a), right: assignChoice(b), applied: false, flash: 0 }
+      : { y, left: assignChoice(b), right: assignChoice(a), applied: false, flash: 0 };
+  }
+
+  // Later rows: a positive operation paired against either another operation
+  // or an enemy. Multipliers are rarer (they're the only path to big numbers).
+  const op = (): Choice => (Math.random() < 0.3 ? mulChoice(pick([2, 2, 3])) : addChoice(randInt(8, 22)));
+
+  let left: Choice;
+  let right: Choice;
+  if (Math.random() < 0.42) {
+    // Enemy row: one lane subtracts a lot, the other is a modest gain.
+    const enemy = enemyChoice(randInt(25, 70));
+    const gain = addChoice(randInt(6, 16));
+    [left, right] = Math.random() < 0.5 ? [enemy, gain] : [gain, enemy];
+  } else {
+    left = op();
+    right = op();
+    let guard = 0;
+    while (right.label === left.label && guard++ < 6) right = op();
+  }
   return { y, left, right, applied: false, flash: 0 };
 }
 
-function applyOp(count: number, op: Op): number {
-  switch (op.kind) {
-    case '+':
-      return count + op.val;
-    case 'x':
-      return count * op.val;
-    case '-':
-      return Math.max(0, count - op.val);
-    case '/':
-      return Math.floor(count / op.val);
+function applyChoice(count: number, ch: Choice): number {
+  switch (ch.kind) {
+    case 'assign':
+      return ch.val;
+    case 'add':
+      return count + ch.val;
+    case 'mul':
+      return count * ch.val;
+    case 'enemy':
+      return Math.max(0, count - ch.val);
   }
 }
 
@@ -106,9 +131,12 @@ interface Dot {
 
 export class GateRunner {
   status: GateStatus = 'ready';
-  count = START_COUNT;
+  count = 0;
+  assigned = false;
   rowsCleared = 0;
   readonly totalRows = NUM_ROWS;
+  bossPower = 0;
+  bossDefeated = false;
 
   private x = CENTER;
   private targetX = CENTER;
@@ -117,7 +145,7 @@ export class GateRunner {
   private pointerX: number | null = null;
 
   private rows: GateRow[] = [];
-  private finishY = 0;
+  private bossY = 0;
   private tick = 0;
   private dots: Dot[] = [];
   private lastDelta: { text: string; color: string; t: number } | null = null;
@@ -132,8 +160,7 @@ export class GateRunner {
   private buildDots() {
     this.dots = [];
     for (let i = 0; i < DOT_CAP; i++) {
-      // Cluster in a rough disc using a spiral so growth looks organic.
-      const a = i * 2.399963; // golden angle
+      const a = i * 2.399963; // golden angle spiral
       const r = 4 + Math.sqrt(i) * 6.2;
       this.dots.push({
         ox: Math.cos(a) * r,
@@ -146,8 +173,10 @@ export class GateRunner {
 
   reset() {
     this.status = 'ready';
-    this.count = START_COUNT;
+    this.count = 0;
+    this.assigned = false;
     this.rowsCleared = 0;
+    this.bossDefeated = false;
     this.x = CENTER;
     this.targetX = CENTER;
     this.moveLeft = false;
@@ -158,22 +187,21 @@ export class GateRunner {
     this.rows = [];
     let y = -ROW_GAP;
     for (let i = 0; i < NUM_ROWS; i++) {
-      this.rows.push(makeRow(y));
+      this.rows.push(makeRow(i, y));
       y -= ROW_GAP;
     }
-    this.finishY = y - ROW_GAP * 0.4;
+    this.bossY = y - ROW_GAP * 0.5;
+    this.bossPower = randInt(110, 160);
   }
 
   start() {
     if (this.status === 'complete') this.reset();
     this.status = 'running';
   }
-
   primary() {
     if (this.status === 'ready') this.start();
   }
 
-  // --- Input ---------------------------------------------------------------
   setMove(dir: 'left' | 'right', down: boolean) {
     if (dir === 'left') this.moveLeft = down;
     else this.moveRight = down;
@@ -194,7 +222,6 @@ export class GateRunner {
 
     if (this.status !== 'running') return;
 
-    // Steering
     if (this.pointerX != null) {
       this.targetX = this.pointerX;
     } else {
@@ -204,25 +231,29 @@ export class GateRunner {
     this.targetX = Math.max(TRACK_LEFT + 14, Math.min(TRACK_RIGHT - 14, this.targetX));
     this.x += (this.targetX - this.x) * Math.min(1, dt * 14);
 
-    // Scroll the world toward the player
     const move = SPEED * dt;
     for (const r of this.rows) r.y += move;
-    this.finishY += move;
+    this.bossY += move;
 
-    // Apply gates as they reach the player line
     for (const r of this.rows) {
       if (!r.applied && r.y >= PLAYER_Y) {
-        const op = this.x < CENTER ? r.left : r.right;
-        this.count = applyOp(this.count, op);
+        const ch = this.x < CENTER ? r.left : r.right;
+        this.count = applyChoice(this.assigned ? this.count : 0, ch);
+        if (ch.kind === 'assign') this.assigned = true;
         r.applied = true;
         r.flash = 0.5;
         this.rowsCleared++;
-        this.lastDelta = { text: op.label, color: op.color, t: 0.9 };
+        this.lastDelta = { text: ch.label, color: ch.color, t: 0.95 };
       }
     }
 
-    // Finish
-    if (this.finishY >= PLAYER_Y) {
+    // Final boss fight at the end.
+    if (!this.bossDefeated && this.bossY >= PLAYER_Y) {
+      this.bossDefeated = true;
+      const before = this.count;
+      this.count = Math.max(0, this.count - this.bossPower);
+      this.lastDelta = { text: `boss −${this.bossPower}`, color: C.boss, t: 1.2 };
+      void before;
       this.status = 'complete';
       this.onComplete?.(this.count);
     }
@@ -230,7 +261,6 @@ export class GateRunner {
 
   // --- Rendering -----------------------------------------------------------
   draw(ctx: CanvasRenderingContext2D) {
-    // Background gradient (sky -> horizon)
     const grad = ctx.createLinearGradient(0, 0, 0, GH);
     grad.addColorStop(0, '#7dd3fc');
     grad.addColorStop(0.5, '#a78bfa');
@@ -238,16 +268,12 @@ export class GateRunner {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, GW, GH);
 
-    // Track
     ctx.fillStyle = '#eef2f7';
-    this.roundRect(ctx, TRACK_LEFT, 0, TRACK_RIGHT - TRACK_LEFT, GH, 0);
-    ctx.fill();
-    // Side rails
+    ctx.fillRect(TRACK_LEFT, 0, TRACK_RIGHT - TRACK_LEFT, GH);
     ctx.fillStyle = '#cbd5e1';
     ctx.fillRect(TRACK_LEFT - 6, 0, 6, GH);
     ctx.fillRect(TRACK_RIGHT, 0, 6, GH);
 
-    // Moving lane stripes for a sense of speed
     ctx.fillStyle = '#dbe2ec';
     const stripeH = 46;
     const offset = (this.tick * 3.1) % (stripeH * 2);
@@ -255,80 +281,104 @@ export class GateRunner {
       ctx.fillRect(CENTER - 3, y, 6, stripeH);
     }
 
-    // Gate rows
     for (const r of this.rows) {
       if (r.y < -GATE_H || r.y > GH + GATE_H) continue;
-      this.drawGate(ctx, r, true);
-      this.drawGate(ctx, r, false);
+      this.drawChoice(ctx, r, true);
+      this.drawChoice(ctx, r, false);
     }
 
-    // Finish banner
-    this.drawFinish(ctx);
-
-    // Player crowd
+    this.drawBoss(ctx);
     this.drawCrowd(ctx);
 
-    // Floating op feedback
     if (this.lastDelta) {
       ctx.globalAlpha = Math.min(1, this.lastDelta.t * 2);
       ctx.fillStyle = this.lastDelta.color;
-      ctx.font = '800 30px Inter, system-ui, sans-serif';
+      ctx.font = '800 30px Fredoka, Inter, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(this.lastDelta.text, this.x, PLAYER_Y - 56 - (0.9 - this.lastDelta.t) * 30);
+      ctx.fillText(this.lastDelta.text, this.x, PLAYER_Y - 64 - (0.95 - this.lastDelta.t) * 26);
       ctx.globalAlpha = 1;
     }
 
-    // HUD progress bar
     this.drawHud(ctx);
   }
 
-  private drawGate(ctx: CanvasRenderingContext2D, r: GateRow, isLeft: boolean) {
-    const op = isLeft ? r.left : r.right;
+  private drawChoice(ctx: CanvasRenderingContext2D, r: GateRow, isLeft: boolean) {
+    const ch = isLeft ? r.left : r.right;
     const x0 = isLeft ? TRACK_LEFT + 4 : CENTER + 4;
     const x1 = isLeft ? CENTER - 4 : TRACK_RIGHT - 4;
     const w = x1 - x0;
     const top = r.y - GATE_H / 2;
 
-    // translucent colored panel
-    ctx.fillStyle = op.color;
+    if (ch.kind === 'enemy') {
+      // Enemy: a solid red blob with little angry eyes.
+      ctx.fillStyle = ch.color;
+      ctx.globalAlpha = r.flash > 0 ? 0.95 : 0.9;
+      this.roundRect(ctx, x0 + w * 0.2, top + 6, w * 0.6, GATE_H - 12, 14);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff';
+      const cy = r.y - 4;
+      ctx.fillRect((x0 + x1) / 2 - 10, cy, 4, 4);
+      ctx.fillRect((x0 + x1) / 2 + 6, cy, 4, 4);
+      ctx.fillStyle = '#fff';
+      ctx.font = '800 24px Fredoka, Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ch.label, (x0 + x1) / 2, r.y + 14);
+      ctx.textBaseline = 'alphabetic';
+      return;
+    }
+
+    ctx.fillStyle = ch.color;
     ctx.globalAlpha = r.flash > 0 ? 0.85 : 0.42;
     this.roundRect(ctx, x0, top, w, GATE_H, 12);
     ctx.fill();
     ctx.globalAlpha = 1;
-
-    // solid header bar
-    ctx.fillStyle = op.color;
+    ctx.fillStyle = ch.color;
     this.roundRect(ctx, x0, top, w, 16, 8);
     ctx.fill();
-
-    // label
     ctx.fillStyle = '#ffffff';
-    ctx.font = '800 30px Inter, system-ui, sans-serif';
+    ctx.font = '800 28px Fredoka, Inter, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(op.label, (x0 + x1) / 2, r.y + 6);
+    ctx.fillText(ch.label, (x0 + x1) / 2, r.y + 6);
     ctx.textBaseline = 'alphabetic';
   }
 
-  private drawFinish(ctx: CanvasRenderingContext2D) {
-    const y = this.finishY;
-    if (y < -40 || y > GH + 40) return;
-    const sq = 16;
-    for (let i = 0; i * sq < TRACK_RIGHT - TRACK_LEFT; i++) {
-      ctx.fillStyle = i % 2 === 0 ? '#111827' : '#ffffff';
-      ctx.fillRect(TRACK_LEFT + i * sq, y - sq, sq, sq);
-      ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#111827';
-      ctx.fillRect(TRACK_LEFT + i * sq, y, sq, sq);
-    }
-    ctx.fillStyle = '#111827';
-    ctx.font = '800 22px Inter, system-ui, sans-serif';
+  private drawBoss(ctx: CanvasRenderingContext2D) {
+    const y = this.bossY;
+    if (y < -80 || y > GH + 40) return;
+    const w = TRACK_RIGHT - TRACK_LEFT - 20;
+    const h = 78;
+    ctx.fillStyle = C.boss;
+    this.roundRect(ctx, TRACK_LEFT + 10, y - h, w, h, 16);
+    ctx.fill();
+    // angry eyes
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(CENTER - 26, y - h + 22, 12, 10);
+    ctx.fillRect(CENTER + 14, y - h + 22, 12, 10);
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 16px Fredoka, Inter, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('FINISH', CENTER, y - sq - 10);
+    ctx.fillText('👹 BOSS', CENTER, y - h - 8);
+    ctx.font = '800 26px Fredoka, Inter, sans-serif';
+    ctx.fillText(String(this.bossPower), CENTER, y - 18);
   }
 
   private drawCrowd(ctx: CanvasRenderingContext2D) {
+    if (!this.assigned) {
+      // Before assignment we are literally the variable "x".
+      ctx.fillStyle = C.assign;
+      ctx.font = '800 64px Fredoka, Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('x', this.x, PLAYER_Y);
+      ctx.textBaseline = 'alphabetic';
+      this.drawBubble(ctx, 'x');
+      return;
+    }
     const shown = Math.max(1, Math.min(DOT_CAP, this.count));
-    const scale = 1 + Math.min(1.1, this.count / 120);
+    const scale = 1 + Math.min(1.3, this.count / 150);
     for (let i = 0; i < shown; i++) {
       const d = this.dots[i];
       const bob = Math.sin(this.tick * 0.2 + d.phase) * 2;
@@ -337,13 +387,14 @@ export class GateRunner {
       ctx.arc(this.x + d.ox * scale, PLAYER_Y + d.oy * scale + bob, 5.2, 0, Math.PI * 2);
       ctx.fill();
     }
+    this.drawBubble(ctx, this.count.toLocaleString());
+  }
 
-    // Count bubble
-    const label = this.count.toLocaleString();
-    ctx.font = '800 26px Inter, system-ui, sans-serif';
+  private drawBubble(ctx: CanvasRenderingContext2D, label: string) {
+    ctx.font = '800 26px Fredoka, Inter, sans-serif';
     const w = Math.max(46, ctx.measureText(label).width + 26);
     const bx = this.x - w / 2;
-    const by = PLAYER_Y - 38 - Math.min(60, Math.sqrt(this.count) * 3.5);
+    const by = PLAYER_Y - 44 - Math.min(64, Math.sqrt(Math.max(1, this.count)) * 3.5);
     ctx.fillStyle = '#111827';
     this.roundRect(ctx, bx, by, w, 34, 17);
     ctx.fill();
@@ -359,10 +410,10 @@ export class GateRunner {
     const barW = GW - pad * 2;
     const progress = Math.max(0, Math.min(1, this.rowsCleared / (this.totalRows + 1)));
     ctx.fillStyle = 'rgba(17,24,39,0.18)';
-    this.roundRect(ctx, pad, 14, barW, 10, 5);
+    this.roundRect(ctx, pad, 16, barW, 10, 5);
     ctx.fill();
-    ctx.fillStyle = '#4f46e5';
-    this.roundRect(ctx, pad, 14, Math.max(10, barW * progress), 10, 5);
+    ctx.fillStyle = '#7c3aed';
+    this.roundRect(ctx, pad, 16, Math.max(10, barW * progress), 10, 5);
     ctx.fill();
   }
 
@@ -384,16 +435,17 @@ export class GateRunner {
     ctx.closePath();
   }
 
-  // DEV-only state mirror for automated playtests.
   debugSnapshot() {
     return {
       s: this.status,
       c: this.count,
+      assigned: this.assigned,
       x: Math.round(this.x),
+      boss: this.bossPower,
       rows: this.rows
         .filter((r) => r.y > -GATE_H && r.y < GH)
         .map((r) => [Math.round(r.y), r.left.label, r.right.label, r.applied ? 1 : 0]),
-      fy: Math.round(this.finishY),
+      by: Math.round(this.bossY),
     };
   }
 }

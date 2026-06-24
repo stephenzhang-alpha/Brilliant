@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useScoresStore, GameUser } from '../stores/scoresStore';
@@ -10,12 +10,20 @@ function medal(rank: number): string {
 
 export function LeaderboardPage() {
   const { user } = useAuthStore();
-  const { best, leaderboard, leaderboardLoading, leaderboardError, loadLeaderboard } =
+  const { best, leaderboard, leaderboardLoading, leaderboardError, loadLeaderboard, playerName, setPlayerName } =
     useScoresStore();
 
   const gameUser: GameUser | null = user
     ? { uid: user.uid, email: 'email' in user ? user.email : null }
     : null;
+
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(playerName);
+
+  const saveName = async () => {
+    await setPlayerName(nameDraft, gameUser);
+    setEditingName(false);
+  };
 
   useEffect(() => {
     loadLeaderboard(gameUser);
@@ -34,11 +42,48 @@ export function LeaderboardPage() {
         </Link>
       </div>
 
-      <div className="bg-surface shadow-sm border border-black/10 rounded-xl px-5 py-4 mb-6 flex items-center justify-between">
+      <div className="bg-surface shadow-sm border border-black/10 rounded-xl px-5 py-4 mb-4 flex items-center justify-between">
         <span className="text-text-muted">Your personal best</span>
         <span className="text-2xl font-extrabold text-primary-light tabular-nums">
           {best.toLocaleString()}
         </span>
+      </div>
+
+      <div className="bg-surface shadow-sm border border-black/10 rounded-xl px-5 py-4 mb-6 flex items-center justify-between gap-3">
+        <span className="text-text-muted shrink-0">Your handle</span>
+        {editingName ? (
+          <div className="flex items-center gap-2 min-w-0">
+            <input
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              maxLength={20}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void saveName();
+                if (e.key === 'Escape') setEditingName(false);
+              }}
+              className="bg-surface-light border border-black/10 rounded-full px-4 py-1.5 text-text focus:outline-none focus:border-primary-light w-40"
+              placeholder="Your handle"
+            />
+            <button
+              onClick={saveName}
+              className="bg-primary hover:bg-primary-dark text-white rounded-full px-4 py-1.5 font-medium"
+            >
+              Save
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setNameDraft(playerName);
+              setEditingName(true);
+            }}
+            className="font-semibold hover:text-primary-light transition-colors"
+            title="Change your leaderboard handle"
+          >
+            {playerName} <span className="text-text-muted ml-0.5">✎</span>
+          </button>
+        )}
       </div>
 
       {!isFirebaseConfigured && (

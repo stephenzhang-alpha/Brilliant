@@ -78,7 +78,8 @@ interface Bump {
 
 const BIRD_W = 46;
 const BIRD_H = 30;
-const BIRD_TIERS = [GROUND_Y - 28, 66, 44]; // low (jump), mid (duck/jump), high (run under)
+// Heights are relative to the ground so they stay fair regardless of world height.
+const BIRD_TIERS = [GROUND_Y - 28, GROUND_Y - 62, GROUND_Y - 84]; // low (jump), mid (duck/jump), high (run under)
 
 function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
