@@ -1,16 +1,20 @@
 // ---------------------------------------------------------------------------
-// Gate Runner — engine (v2)
+// Gate Runner — engine (v2, pseudo-3D)
 //
-// A "math gates" runner in the mobile-ad style, re-themed around variables:
+// A "math gates" runner rendered in the pseudo-3D, camera-behind-the-crowd style
+// of mobile-game ads: a road recedes toward a horizon, gates/enemies grow as
+// they rush toward you, and your crowd runs at the bottom of the screen.
+//
+// Algebra theming:
 //   • You begin as the variable x (an unknown value).
 //   • An ASSIGNMENT gate gives x a concrete value (x = 5 / x = 9 …).
-//   • OPERATION gates then transform your value (+n, ×n).
-//   • ENEMY lanes subtract from your value — steer around them.
-//   • A FINAL BOSS at the end fights your crowd; the survivors are your score.
+//   • OPERATION gates transform your value (+n, ×n).
+//   • ENEMY lanes subtract from your value — steer to the other side.
+//   • A FINAL BOSS fights your crowd; the survivors are your score.
 //
 // Scoring is tuned so a strong run lands in the few-hundreds and breaking 1000
-// is genuinely hard. Same contract as before: the React layer runs the rAF
-// loop, calls update(dt) + draw(ctx), forwards input, and reads status/count.
+// is genuinely hard. The React layer runs the rAF loop, calls update(dt) +
+// draw(ctx), forwards input, and reads status/count.
 // ---------------------------------------------------------------------------
 
 export type GateStatus = 'ready' | 'running' | 'complete';
@@ -23,7 +27,7 @@ interface Choice {
   label: string;
 }
 interface GateRow {
-  y: number;
+  z: number; // distance from the camera (0 = at the player line)
   left: Choice;
   right: Choice;
   applied: boolean;
@@ -33,24 +37,26 @@ interface GateRow {
 export const GW = 430;
 export const GH = 640;
 
-const PLAYER_Y = GH - 120;
-const TRACK_MARGIN = 26;
-const TRACK_LEFT = TRACK_MARGIN;
-const TRACK_RIGHT = GW - TRACK_MARGIN;
+// --- Pseudo-3D camera ------------------------------------------------------
 const CENTER = GW / 2;
-const GATE_H = 70;
+const HORIZON_Y = 150; // road vanishing height
+const NEAR_Y = 545; // player line (bottom of the road)
+const NEAR_HALF_W = 192; // half road width at the near edge
+const CAM_D = 0.72; // camera distance — controls how fast things shrink
 
-const SPEED = 196; // px/s downward scroll
-const ROW_GAP = 220;
+const Z_START = 3.6; // distance of the first gate at the start
+const ROW_GAP_Z = 1.5; // z-distance between gate rows
+const SPEED_Z = 1.18; // z-units travelled per second
 const NUM_ROWS = 11; // row 0 = assignment, then ops / enemies
-const KEY_SPEED = 560;
+const KEY_LANE_SPEED = 2.6; // lane units per second from keyboard
 const DOT_CAP = 80;
+const GATE_NEAR_H = 96; // gate panel height at the near plane (s = 1)
 
 const C = {
-  assign: '#7c3aed', // violet — variable assignment
-  add: '#22c55e', // green
-  mul: '#3b82f6', // blue
-  enemy: '#ef4444', // red — subtracts
+  assign: '#7c3aed',
+  add: '#22c55e',
+  mul: '#3b82f6',
+  enemy: '#ef4444',
   boss: '#b91c1c',
 };
 const CROWD_COLORS = ['#fbbf24', '#ec4899', '#22c55e', '#06b6d4', '#8b5cf6', '#fb5b6b'];
@@ -78,25 +84,18 @@ function enemyChoice(val: number): Choice {
   return { kind: 'enemy', val, color: C.enemy, label: `−${val}` };
 }
 
-/** Build one row given its index (0 = assignment row). */
-function makeRow(index: number, y: number): GateRow {
+function makeRow(index: number, z: number): GateRow {
   if (index === 0) {
-    // Assignment: two starting values for x.
     const a = randInt(4, 7);
     const b = a + randInt(2, 4);
     return Math.random() < 0.5
-      ? { y, left: assignChoice(a), right: assignChoice(b), applied: false, flash: 0 }
-      : { y, left: assignChoice(b), right: assignChoice(a), applied: false, flash: 0 };
+      ? { z, left: assignChoice(a), right: assignChoice(b), applied: false, flash: 0 }
+      : { z, left: assignChoice(b), right: assignChoice(a), applied: false, flash: 0 };
   }
-
-  // Later rows: a positive operation paired against either another operation
-  // or an enemy. Multipliers are rarer (they're the only path to big numbers).
   const op = (): Choice => (Math.random() < 0.3 ? mulChoice(pick([2, 2, 3])) : addChoice(randInt(8, 22)));
-
   let left: Choice;
   let right: Choice;
   if (Math.random() < 0.42) {
-    // Enemy row: one lane subtracts a lot, the other is a modest gain.
     const enemy = enemyChoice(randInt(25, 70));
     const gain = addChoice(randInt(6, 16));
     [left, right] = Math.random() < 0.5 ? [enemy, gain] : [gain, enemy];
@@ -106,7 +105,7 @@ function makeRow(index: number, y: number): GateRow {
     let guard = 0;
     while (right.label === left.label && guard++ < 6) right = op();
   }
-  return { y, left, right, applied: false, flash: 0 };
+  return { z, left, right, applied: false, flash: 0 };
 }
 
 function applyChoice(count: number, ch: Choice): number {
@@ -138,14 +137,14 @@ export class GateRunner {
   bossPower = 0;
   bossDefeated = false;
 
-  private x = CENTER;
-  private targetX = CENTER;
+  private lane = 0; // -1 (left) .. 1 (right)
+  private targetLane = 0;
   private moveLeft = false;
   private moveRight = false;
-  private pointerX: number | null = null;
+  private pointerLane: number | null = null;
 
   private rows: GateRow[] = [];
-  private bossY = 0;
+  private bossZ = 0;
   private tick = 0;
   private dots: Dot[] = [];
   private lastDelta: { text: string; color: string; t: number } | null = null;
@@ -160,11 +159,11 @@ export class GateRunner {
   private buildDots() {
     this.dots = [];
     for (let i = 0; i < DOT_CAP; i++) {
-      const a = i * 2.399963; // golden angle spiral
-      const r = 4 + Math.sqrt(i) * 6.2;
+      const a = i * 2.399963;
+      const r = 4 + Math.sqrt(i) * 6.4;
       this.dots.push({
         ox: Math.cos(a) * r,
-        oy: Math.sin(a) * r * 0.7,
+        oy: Math.sin(a) * r * 0.6,
         color: CROWD_COLORS[i % CROWD_COLORS.length],
         phase: Math.random() * Math.PI * 2,
       });
@@ -177,20 +176,18 @@ export class GateRunner {
     this.assigned = false;
     this.rowsCleared = 0;
     this.bossDefeated = false;
-    this.x = CENTER;
-    this.targetX = CENTER;
+    this.lane = 0;
+    this.targetLane = 0;
     this.moveLeft = false;
     this.moveRight = false;
-    this.pointerX = null;
+    this.pointerLane = null;
     this.tick = 0;
     this.lastDelta = null;
     this.rows = [];
-    let y = -ROW_GAP;
     for (let i = 0; i < NUM_ROWS; i++) {
-      this.rows.push(makeRow(i, y));
-      y -= ROW_GAP;
+      this.rows.push(makeRow(i, Z_START + i * ROW_GAP_Z));
     }
-    this.bossY = y - ROW_GAP * 0.5;
+    this.bossZ = Z_START + NUM_ROWS * ROW_GAP_Z + 1.1;
     this.bossPower = randInt(110, 160);
   }
 
@@ -206,8 +203,19 @@ export class GateRunner {
     if (dir === 'left') this.moveLeft = down;
     else this.moveRight = down;
   }
+  /** Pointer X in canvas/world space (0..GW); converted to a lane internally. */
   setPointerX(x: number | null) {
-    this.pointerX = x;
+    this.pointerLane = x == null ? null : Math.max(-1, Math.min(1, (x - CENTER) / NEAR_HALF_W));
+  }
+
+  // --- Perspective projection ----------------------------------------------
+  private scaleAt(z: number): number {
+    return CAM_D / (CAM_D + Math.max(0, z));
+  }
+  private project(lane: number, z: number): { x: number; y: number; s: number; halfW: number } {
+    const s = this.scaleAt(z);
+    const halfW = NEAR_HALF_W * s;
+    return { x: CENTER + lane * halfW, y: HORIZON_Y + (NEAR_Y - HORIZON_Y) * s, s, halfW };
   }
 
   // --- Simulation ----------------------------------------------------------
@@ -222,22 +230,20 @@ export class GateRunner {
 
     if (this.status !== 'running') return;
 
-    if (this.pointerX != null) {
-      this.targetX = this.pointerX;
+    if (this.pointerLane != null) {
+      this.targetLane = this.pointerLane;
     } else {
-      if (this.moveLeft) this.targetX -= KEY_SPEED * dt;
-      if (this.moveRight) this.targetX += KEY_SPEED * dt;
+      if (this.moveLeft) this.targetLane -= KEY_LANE_SPEED * dt;
+      if (this.moveRight) this.targetLane += KEY_LANE_SPEED * dt;
     }
-    this.targetX = Math.max(TRACK_LEFT + 14, Math.min(TRACK_RIGHT - 14, this.targetX));
-    this.x += (this.targetX - this.x) * Math.min(1, dt * 14);
+    this.targetLane = Math.max(-1, Math.min(1, this.targetLane));
+    this.lane += (this.targetLane - this.lane) * Math.min(1, dt * 14);
 
-    const move = SPEED * dt;
-    for (const r of this.rows) r.y += move;
-    this.bossY += move;
-
+    const dz = SPEED_Z * dt;
     for (const r of this.rows) {
-      if (!r.applied && r.y >= PLAYER_Y) {
-        const ch = this.x < CENTER ? r.left : r.right;
+      r.z -= dz;
+      if (!r.applied && r.z <= 0) {
+        const ch = this.lane < 0 ? r.left : r.right;
         this.count = applyChoice(this.assigned ? this.count : 0, ch);
         if (ch.kind === 'assign') this.assigned = true;
         r.applied = true;
@@ -247,13 +253,11 @@ export class GateRunner {
       }
     }
 
-    // Final boss fight at the end.
-    if (!this.bossDefeated && this.bossY >= PLAYER_Y) {
+    this.bossZ -= dz;
+    if (!this.bossDefeated && this.bossZ <= 0) {
       this.bossDefeated = true;
-      const before = this.count;
       this.count = Math.max(0, this.count - this.bossPower);
-      this.lastDelta = { text: `boss −${this.bossPower}`, color: C.boss, t: 1.2 };
-      void before;
+      this.lastDelta = { text: `boss −${this.bossPower}`, color: C.boss, t: 1.4 };
       this.status = 'complete';
       this.onComplete?.(this.count);
     }
@@ -261,41 +265,89 @@ export class GateRunner {
 
   // --- Rendering -----------------------------------------------------------
   draw(ctx: CanvasRenderingContext2D) {
-    const grad = ctx.createLinearGradient(0, 0, 0, GH);
-    grad.addColorStop(0, '#7dd3fc');
-    grad.addColorStop(0.5, '#a78bfa');
-    grad.addColorStop(1, '#f0abfc');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, GW, GH);
+    // Sky
+    const sky = ctx.createLinearGradient(0, 0, 0, HORIZON_Y + 60);
+    sky.addColorStop(0, '#7dd3fc');
+    sky.addColorStop(1, '#c4b5fd');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, GW, HORIZON_Y + 60);
 
+    // Distant sun + hills for depth
+    ctx.fillStyle = '#fde68a';
+    ctx.beginPath();
+    ctx.arc(CENTER, HORIZON_Y - 6, 40, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ground plane below the horizon
+    const ground = ctx.createLinearGradient(0, HORIZON_Y, 0, GH);
+    ground.addColorStop(0, '#a78bfa');
+    ground.addColorStop(1, '#f0abfc');
+    ctx.fillStyle = ground;
+    ctx.fillRect(0, HORIZON_Y, GW, GH - HORIZON_Y);
+
+    // Road trapezoid (near wide -> horizon point)
+    const nearL = this.project(-1, 0);
+    const nearR = this.project(1, 0);
+    const farL = this.project(-1, 60);
+    const farR = this.project(1, 60);
     ctx.fillStyle = '#eef2f7';
-    ctx.fillRect(TRACK_LEFT, 0, TRACK_RIGHT - TRACK_LEFT, GH);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.fillRect(TRACK_LEFT - 6, 0, 6, GH);
-    ctx.fillRect(TRACK_RIGHT, 0, 6, GH);
+    ctx.beginPath();
+    ctx.moveTo(nearL.x, nearL.y);
+    ctx.lineTo(nearR.x, nearR.y);
+    ctx.lineTo(farR.x, farR.y);
+    ctx.lineTo(farL.x, farL.y);
+    ctx.closePath();
+    ctx.fill();
 
+    // Side rails
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(nearL.x, nearL.y);
+    ctx.lineTo(farL.x, farL.y);
+    ctx.moveTo(nearR.x, nearR.y);
+    ctx.lineTo(farR.x, farR.y);
+    ctx.stroke();
+
+    // Flowing centre dashes (speed)
+    const STRIPE_GAP = 1.0;
+    const phase = (this.tick * 0.018) % STRIPE_GAP;
     ctx.fillStyle = '#dbe2ec';
-    const stripeH = 46;
-    const offset = (this.tick * 3.1) % (stripeH * 2);
-    for (let y = -stripeH * 2 + offset; y < GH; y += stripeH * 2) {
-      ctx.fillRect(CENTER - 3, y, 6, stripeH);
+    for (let k = 0; k < 26; k++) {
+      const z0 = k * STRIPE_GAP - phase;
+      if (z0 <= 0.02) continue;
+      const a = this.project(0, z0);
+      const b = this.project(0, z0 + 0.42);
+      const wa = Math.max(1, 7 * a.s);
+      const wb = Math.max(1, 7 * b.s);
+      ctx.beginPath();
+      ctx.moveTo(a.x - wa, a.y);
+      ctx.lineTo(a.x + wa, a.y);
+      ctx.lineTo(b.x + wb, b.y);
+      ctx.lineTo(b.x - wb, b.y);
+      ctx.closePath();
+      ctx.fill();
     }
 
-    for (const r of this.rows) {
-      if (r.y < -GATE_H || r.y > GH + GATE_H) continue;
+    // Rows + boss, far to near (painter's algorithm)
+    const drawables = this.rows
+      .filter((r) => r.z > 0.02 && r.z < 60 && !r.applied)
+      .sort((p, q) => q.z - p.z);
+    for (const r of drawables) {
       this.drawChoice(ctx, r, true);
       this.drawChoice(ctx, r, false);
     }
-
     this.drawBoss(ctx);
+
+    // Player crowd (nearest, on top)
     this.drawCrowd(ctx);
 
     if (this.lastDelta) {
       ctx.globalAlpha = Math.min(1, this.lastDelta.t * 2);
       ctx.fillStyle = this.lastDelta.color;
-      ctx.font = '800 30px Fredoka, Inter, sans-serif';
+      ctx.font = '800 34px Fredoka, Inter, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(this.lastDelta.text, this.x, PLAYER_Y - 64 - (0.95 - this.lastDelta.t) * 26);
+      ctx.fillText(this.lastDelta.text, CENTER + this.lane * NEAR_HALF_W, NEAR_Y - 96 - (0.95 - this.lastDelta.t) * 26);
       ctx.globalAlpha = 1;
     }
 
@@ -304,104 +356,106 @@ export class GateRunner {
 
   private drawChoice(ctx: CanvasRenderingContext2D, r: GateRow, isLeft: boolean) {
     const ch = isLeft ? r.left : r.right;
-    const x0 = isLeft ? TRACK_LEFT + 4 : CENTER + 4;
-    const x1 = isLeft ? CENTER - 4 : TRACK_RIGHT - 4;
-    const w = x1 - x0;
-    const top = r.y - GATE_H / 2;
+    // Lane span for each half (small gap at the centre divider).
+    const laneCenter = isLeft ? -0.52 : 0.52;
+    const laneSpan = 0.9;
+    const p = this.project(laneCenter, r.z);
+    const w = laneSpan * NEAR_HALF_W * p.s;
+    const h = GATE_NEAR_H * p.s;
+    const x0 = p.x - w / 2;
+    const top = p.y - h;
+    if (h < 2) return;
 
     if (ch.kind === 'enemy') {
-      // Enemy: a solid red blob with little angry eyes.
       ctx.fillStyle = ch.color;
-      ctx.globalAlpha = r.flash > 0 ? 0.95 : 0.9;
-      this.roundRect(ctx, x0 + w * 0.2, top + 6, w * 0.6, GATE_H - 12, 14);
+      ctx.globalAlpha = r.flash > 0 ? 1 : 0.92;
+      this.roundRect(ctx, x0 + w * 0.16, top + h * 0.12, w * 0.68, h * 0.8, 12 * p.s);
       ctx.fill();
       ctx.globalAlpha = 1;
+      // angry eyes
       ctx.fillStyle = '#fff';
-      const cy = r.y - 4;
-      ctx.fillRect((x0 + x1) / 2 - 10, cy, 4, 4);
-      ctx.fillRect((x0 + x1) / 2 + 6, cy, 4, 4);
-      ctx.fillStyle = '#fff';
-      ctx.font = '800 24px Fredoka, Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(ch.label, (x0 + x1) / 2, r.y + 14);
-      ctx.textBaseline = 'alphabetic';
+      const ey = p.y - h * 0.62;
+      ctx.fillRect(p.x - 12 * p.s, ey, 6 * p.s, 6 * p.s);
+      ctx.fillRect(p.x + 6 * p.s, ey, 6 * p.s, 6 * p.s);
+      this.label(ctx, ch.label, p.x, p.y - h * 0.28, p.s, '#fff');
       return;
     }
 
+    // translucent column + solid header bar
     ctx.fillStyle = ch.color;
-    ctx.globalAlpha = r.flash > 0 ? 0.85 : 0.42;
-    this.roundRect(ctx, x0, top, w, GATE_H, 12);
+    ctx.globalAlpha = r.flash > 0 ? 0.9 : 0.46;
+    this.roundRect(ctx, x0, top, w, h, 12 * p.s);
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.fillStyle = ch.color;
-    this.roundRect(ctx, x0, top, w, 16, 8);
+    this.roundRect(ctx, x0, top, w, Math.max(3, 16 * p.s), 8 * p.s);
     ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 28px Fredoka, Inter, sans-serif';
+    this.label(ctx, ch.label, p.x, p.y - h * 0.42, p.s, '#fff');
+  }
+
+  private label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, s: number, color: string) {
+    const size = Math.max(9, Math.round(34 * s));
+    ctx.fillStyle = color;
+    ctx.font = `800 ${size}px Fredoka, Inter, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(ch.label, (x0 + x1) / 2, r.y + 6);
+    ctx.fillText(text, x, y);
     ctx.textBaseline = 'alphabetic';
   }
 
   private drawBoss(ctx: CanvasRenderingContext2D) {
-    const y = this.bossY;
-    if (y < -80 || y > GH + 40) return;
-    const w = TRACK_RIGHT - TRACK_LEFT - 20;
-    const h = 78;
+    if (this.bossDefeated || this.bossZ <= 0.02 || this.bossZ > 60) return;
+    const p = this.project(0, this.bossZ);
+    const w = 1.7 * NEAR_HALF_W * p.s;
+    const h = 150 * p.s;
+    if (h < 3) return;
     ctx.fillStyle = C.boss;
-    this.roundRect(ctx, TRACK_LEFT + 10, y - h, w, h, 16);
+    this.roundRect(ctx, p.x - w / 2, p.y - h, w, h * 0.9, 16 * p.s);
     ctx.fill();
-    // angry eyes
     ctx.fillStyle = '#fff';
-    ctx.fillRect(CENTER - 26, y - h + 22, 12, 10);
-    ctx.fillRect(CENTER + 14, y - h + 22, 12, 10);
-    ctx.fillStyle = '#fff';
-    ctx.font = '800 16px Fredoka, Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('👹 BOSS', CENTER, y - h - 8);
-    ctx.font = '800 26px Fredoka, Inter, sans-serif';
-    ctx.fillText(String(this.bossPower), CENTER, y - 18);
+    ctx.fillRect(p.x - 22 * p.s, p.y - h * 0.66, 14 * p.s, 12 * p.s);
+    ctx.fillRect(p.x + 8 * p.s, p.y - h * 0.66, 14 * p.s, 12 * p.s);
+    this.label(ctx, '👹', p.x, p.y - h * 0.95, p.s * 1.2, '#fff');
+    this.label(ctx, String(this.bossPower), p.x, p.y - h * 0.3, p.s * 1.1, '#fff');
   }
 
   private drawCrowd(ctx: CanvasRenderingContext2D) {
+    const px = CENTER + this.lane * NEAR_HALF_W;
     if (!this.assigned) {
-      // Before assignment we are literally the variable "x".
       ctx.fillStyle = C.assign;
-      ctx.font = '800 64px Fredoka, Inter, sans-serif';
+      ctx.font = '800 76px Fredoka, Inter, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('x', this.x, PLAYER_Y);
+      ctx.fillText('x', px, NEAR_Y - 28);
       ctx.textBaseline = 'alphabetic';
-      this.drawBubble(ctx, 'x');
+      this.drawBubble(ctx, px, 'x');
       return;
     }
     const shown = Math.max(1, Math.min(DOT_CAP, this.count));
-    const scale = 1 + Math.min(1.3, this.count / 150);
+    const scale = 1.15 + Math.min(1.5, this.count / 140);
     for (let i = 0; i < shown; i++) {
       const d = this.dots[i];
       const bob = Math.sin(this.tick * 0.2 + d.phase) * 2;
       ctx.fillStyle = d.color;
       ctx.beginPath();
-      ctx.arc(this.x + d.ox * scale, PLAYER_Y + d.oy * scale + bob, 5.2, 0, Math.PI * 2);
+      ctx.arc(px + d.ox * scale, NEAR_Y + d.oy * scale + bob, 5.6, 0, Math.PI * 2);
       ctx.fill();
     }
-    this.drawBubble(ctx, this.count.toLocaleString());
+    this.drawBubble(ctx, px, this.count.toLocaleString());
   }
 
-  private drawBubble(ctx: CanvasRenderingContext2D, label: string) {
-    ctx.font = '800 26px Fredoka, Inter, sans-serif';
-    const w = Math.max(46, ctx.measureText(label).width + 26);
-    const bx = this.x - w / 2;
-    const by = PLAYER_Y - 44 - Math.min(64, Math.sqrt(Math.max(1, this.count)) * 3.5);
+  private drawBubble(ctx: CanvasRenderingContext2D, px: number, label: string) {
+    ctx.font = '800 28px Fredoka, Inter, sans-serif';
+    const w = Math.max(50, ctx.measureText(label).width + 28);
+    const bx = px - w / 2;
+    const by = NEAR_Y - 70 - Math.min(60, Math.sqrt(Math.max(1, this.count)) * 3);
     ctx.fillStyle = '#111827';
-    this.roundRect(ctx, bx, by, w, 34, 17);
+    this.roundRect(ctx, bx, by, w, 36, 18);
     ctx.fill();
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(label, this.x, by + 18);
+    ctx.fillText(label, px, by + 19);
     ctx.textBaseline = 'alphabetic';
   }
 
@@ -440,12 +494,12 @@ export class GateRunner {
       s: this.status,
       c: this.count,
       assigned: this.assigned,
-      x: Math.round(this.x),
+      lane: Number(this.lane.toFixed(2)),
       boss: this.bossPower,
       rows: this.rows
-        .filter((r) => r.y > -GATE_H && r.y < GH)
-        .map((r) => [Math.round(r.y), r.left.label, r.right.label, r.applied ? 1 : 0]),
-      by: Math.round(this.bossY),
+        .filter((r) => !r.applied && r.z > 0 && r.z < 14)
+        .map((r) => [Number(r.z.toFixed(1)), r.left.label, r.right.label]),
+      bz: Number(this.bossZ.toFixed(1)),
     };
   }
 }
