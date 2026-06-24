@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import {
+  WORLD_WIDTH,
   DINO_WIDTH,
   DINO_HEIGHT,
   DINO_DUCK_WIDTH,
@@ -271,6 +272,39 @@ export function drawStar(
   ctx.fillStyle = color;
   rect(ctx, x, y + 1, 3, 1);
   rect(ctx, x + 1, y, 1, 3);
+}
+
+// ---------------------------------------------------------------------------
+// Parallax hills / mountains
+// ---------------------------------------------------------------------------
+
+/**
+ * Fills a layer of seamless rolling hills built from summed sine waves.
+ * `offset` scrolls the silhouette horizontally for parallax; because the waves
+ * are periodic the layer wraps with no visible seam. The shape is filled from
+ * its crest line down to `bottomY`.
+ */
+export function drawHills(
+  ctx: CanvasRenderingContext2D,
+  offset: number,
+  crestY: number,
+  amp: number,
+  wavelength: number,
+  bottomY: number,
+  color: string,
+) {
+  const k = (Math.PI * 2) / wavelength;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, bottomY);
+  for (let x = 0; x <= WORLD_WIDTH; x += 12) {
+    const wx = (x + offset) * k;
+    const y = crestY + Math.sin(wx) * amp + Math.sin(wx * 0.5 + 1.3) * amp * 0.5;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(WORLD_WIDTH, bottomY);
+  ctx.closePath();
+  ctx.fill();
 }
 
 // Re-export box dimensions so callers don't import constants twice.

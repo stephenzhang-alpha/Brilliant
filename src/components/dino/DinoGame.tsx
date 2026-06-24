@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { DinoGame as Engine, GameStatus } from '../../game/dino/engine';
-import { WORLD_WIDTH, WORLD_HEIGHT } from '../../game/dino/constants';
+import { WORLD_WIDTH, WORLD_HEIGHT, CHALLENGE_TARGET } from '../../game/dino/constants';
 import { useAuthStore } from '../../stores/authStore';
 import { useScoresStore, GameUser } from '../../stores/scoresStore';
 
@@ -64,7 +64,7 @@ export interface DeathOffer {
 }
 
 /** Steps of the one-time "introduce variables" onboarding. null = normal play. */
-type TutorialStep = 'play' | 'welcome' | 'running' | 'intro' | null;
+type TutorialStep = 'play' | 'welcome' | 'running' | 'intro' | 'challenge' | null;
 
 const TUTORIAL_SEEN_KEY = 'dino_var_tutorial_seen';
 
@@ -91,6 +91,10 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     localStorage.getItem(TUTORIAL_SEEN_KEY) ? null : 'play',
   );
   const [liveScore, setLiveScore] = useState(0);
+  // Interactive variables beat: the score the player jumped at (success), and a
+  // gentle "not yet" hint shown while they wait for s to reach the target.
+  const [challengeScore, setChallengeScore] = useState<number | null>(null);
+  const [challengeHint, setChallengeHint] = useState(false);
 
   const best = useScoresStore((s) => s.best);
 
@@ -242,7 +246,39 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     }, 2600);
   }, [clearTutorialTimers]);
 
+  // After the read-only explanation, hand the player an actual task: keep the
+  // dino in the safe free-run state and ask them to jump when the score
+  // variable s reaches the target. The engine reports the result via callback.
   const onIntroNext = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    clearTutorialTimers();
+    engine.armChallenge(CHALLENGE_TARGET);
+    setChallengeScore(null);
+    setChallengeHint(false);
+    setLiveScore(0);
+    setTutorialStep('challenge');
+    liveTimerRef.current = window.setInterval(() => {
+      setLiveScore(engineRef.current?.score ?? 0);
+    }, 100);
+  }, [clearTutorialTimers]);
+
+  const onChallengeResult = useCallback((success: boolean, score: number) => {
+    if (!success) {
+      setChallengeHint(true);
+      return;
+    }
+    setChallengeHint(false);
+    setChallengeScore(score);
+  }, []);
+
+  // Wire the engine's challenge callback once (the handler is stable).
+  useEffect(() => {
+    const eng = engineRef.current;
+    if (eng) eng.onChallengeResult = onChallengeResult;
+  }, [onChallengeResult]);
+
+  const onChallengeContinue = useCallback(() => {
     clearTutorialTimers();
     engineRef.current?.beginRealGame();
     localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
@@ -276,6 +312,14 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
           <div className="absolute top-2 right-2 pointer-events-none">
             <div className="bg-warning/90 text-white text-xs font-bold rounded-full px-3 py-1 shadow-lg animate-bounce">
               variables ↗
+            </div>
+          </div>
+        )}
+
+        {tutorialStep === 'challenge' && challengeScore === null && (
+          <div className="absolute top-2 right-2 pointer-events-none">
+            <div className="bg-primary/90 text-white text-xs font-bold rounded-full px-3 py-1 shadow-lg animate-bounce">
+              jump at s = {CHALLENGE_TARGET} ↗
             </div>
           </div>
         )}
@@ -390,9 +434,58 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
               onClick={onIntroNext}
               className="bg-primary hover:bg-primary-dark text-white font-bold px-7 py-2.5 rounded-xl transition-colors"
             >
-              Got it — let's play! →
+              Got it — my turn! →
             </button>
           </div>
+        </div>
+      )}
+
+      {tutorialStep === 'challenge' && (
+        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5">
+          {challengeScore === null ? (
+            <>
+              <h3 className="font-extrabold text-lg">Your turn! 🎯</h3>
+              <p className="text-text-muted mt-1.5 text-sm">
+                Keep your eye on the score{' '}
+                <span className="font-mono font-bold text-primary">s</span> in the top-right — it's a
+                variable, so its value keeps changing as you run.{' '}
+                <span className="font-semibold text-text">
+                  Jump the moment it reaches{' '}
+                  <span className="font-mono text-primary">{CHALLENGE_TARGET}</span>!
+                </span>
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <div className="inline-flex items-center gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-1.5 text-sm">
+                  <span className="font-mono font-bold text-text tabular-nums">s = {liveScore}</span>
+                  <span className="text-text-muted">/ {CHALLENGE_TARGET}</span>
+                </div>
+                <span className="text-text-muted text-xs">Press Space or tap to jump</span>
+              </div>
+              {challengeHint && (
+                <p className="text-warning text-xs font-semibold mt-2">
+                  Not yet — wait for <span className="font-mono">s</span> to reach {CHALLENGE_TARGET}.
+                  Keep watching it climb!
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="text-center">
+              <p className="text-2xl">🎉</p>
+              <h3 className="font-extrabold text-lg mt-1">
+                Nice! You jumped at <span className="font-mono text-primary">s = {challengeScore}</span>
+              </h3>
+              <p className="text-text-muted mt-1.5 text-sm max-w-md mx-auto">
+                That's algebra in action — you read a variable's value and acted on it. Ready for the
+                real run?
+              </p>
+              <button
+                onClick={onChallengeContinue}
+                className="mt-4 bg-primary hover:bg-primary-dark text-white font-bold px-7 py-2.5 rounded-xl transition-colors"
+              >
+                Play for real! →
+              </button>
+            </div>
+          )}
         </div>
       )}
 

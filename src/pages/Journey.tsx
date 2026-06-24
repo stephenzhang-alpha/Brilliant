@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { DinoGame } from '../components/dino/DinoGame';
 import { GateRunner } from '../components/gates/GateRunner';
 import { LockedLesson } from '../components/LockedLesson';
+import { ScoreHud } from '../components/score/ScoreHud';
 import { useAuthStore } from '../stores/authStore';
 import { useOverallStore } from '../stores/overallStore';
 
@@ -23,11 +24,12 @@ export function JourneyPage() {
   const addOverall = useOverallStore((s) => s.add);
   const unlock = useOverallStore((s) => s.unlock);
   const overall = useOverallStore((s) => s.overall);
-  const lastGain = useOverallStore((s) => s.lastGain);
   const gatesUnlocked = useOverallStore((s) => s.gatesUnlocked);
   const towerUnlocked = useOverallStore((s) => s.towerUnlocked);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
   const dinoRef = useRef<HTMLElement>(null);
   const gatesRef = useRef<HTMLElement>(null);
   const towerRef = useRef<HTMLElement>(null);
@@ -56,6 +58,30 @@ export function JourneyPage() {
     );
     [dinoRef, gatesRef, towerRef].forEach((r) => r.current && obs.observe(r.current));
     return () => obs.disconnect();
+  }, []);
+
+  // Paint the journey scroll-progress line + bar elevation directly (no React
+  // re-render per frame, so the running games aren't disturbed while scrolling).
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const max = root.scrollHeight - root.clientHeight;
+      const p = max > 0 ? Math.min(1, Math.max(0, root.scrollTop / max)) : 0;
+      if (progressRef.current) progressRef.current.style.transform = `scaleX(${p})`;
+      if (barRef.current) barRef.current.classList.toggle('is-scrolled', root.scrollTop > 6);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    root.addEventListener('scroll', onScroll, { passive: true });
+    update();
+    return () => {
+      root.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
 
   // Dino: the first finished run unlocks Gate Runner.
@@ -125,11 +151,14 @@ export function JourneyPage() {
     <div
       ref={scrollRef}
       className="fixed inset-0 z-40 overflow-y-auto"
-      style={{ scrollSnapType: 'y proximity' }}
+      style={{ scrollSnapType: 'y proximity', scrollPaddingTop: '3.5rem' }}
     >
       {/* Slim floating bar that follows the scroll */}
-      <div className="sticky top-0 z-30 flex items-center justify-between gap-2 px-2 sm:px-3 py-2 bg-black/25 backdrop-blur-md">
-        <div className="flex items-center gap-0.5 sm:gap-1 min-w-0">
+      <div
+        ref={barRef}
+        className="journey-bar sticky top-0 z-30 flex items-center justify-between gap-2 px-2 sm:px-3 py-2 bg-black/25 backdrop-blur-md"
+      >
+        <div className="flex items-center gap-0.5 sm:gap-1 min-w-0 overflow-x-auto no-scrollbar">
           <span className="text-xl mr-0.5 sm:mr-1 animate-bob" aria-hidden>🦖</span>
           {tab('dino', 'Dino')}
           {tab('gates', 'Gates', !gatesUnlocked)}
@@ -142,23 +171,7 @@ export function JourneyPage() {
           </Link>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <div
-            className="relative flex items-center gap-1 bg-amber-400 text-amber-950 rounded-full px-2.5 sm:px-3 py-1 font-display font-bold tabular-nums shadow"
-            title="Your total score across all three games"
-          >
-            <span aria-hidden>⭐</span>
-            <span key={lastGain?.at ?? 'init'} className={lastGain ? 'animate-pop' : ''}>
-              {overall.toLocaleString()}
-            </span>
-            {lastGain && (
-              <span
-                key={`gain-${lastGain.at}`}
-                className="animate-floatup pointer-events-none absolute -top-4 right-2 text-success font-display font-bold text-sm"
-              >
-                +{lastGain.points.toLocaleString()}
-              </span>
-            )}
-          </div>
+          <ScoreHud />
           {user ? (
             <button
               onClick={() => void signOut()}
@@ -175,6 +188,13 @@ export function JourneyPage() {
             </Link>
           )}
         </div>
+        {/* Continuous journey scroll-progress line */}
+        <div
+          ref={progressRef}
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 origin-left bg-gradient-to-r from-cyan via-accent to-amber"
+          style={{ transform: 'scaleX(0)' }}
+        />
       </div>
 
       {/* Stage 1 — Dino (intro: variables) */}

@@ -20,6 +20,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
   const engineRef = useRef<Engine | null>(null);
   const [status, setStatus] = useState<GateStatus>('ready');
   const [finalCount, setFinalCount] = useState(0);
+  const [bestCombo, setBestCombo] = useState(0);
   const activeRef = useRef(active);
   useEffect(() => {
     activeRef.current = active;
@@ -40,6 +41,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
     engineRef.current = engine;
     engine.onComplete = (count) => {
       setFinalCount(count);
+      setBestCombo(engine.bestCombo);
       onFinish?.(count);
     };
 
@@ -124,6 +126,10 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
     }
   }, []);
 
+  const headline =
+    finalCount >= 1000 ? 'JACKPOT!' : finalCount >= 500 ? 'Huge run!' : finalCount >= 200 ? 'Nice run!' : 'Finish!';
+  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 500 ? '🚀' : '🎉';
+
   return (
     <div className="w-full max-w-[430px] mx-auto">
       <div
@@ -139,11 +145,16 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
         {status === 'ready' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none px-6 text-center">
             <div className="bg-black/55 backdrop-blur-sm rounded-2xl px-6 py-5">
-              <p className="text-white font-extrabold text-2xl">Gate Runner</p>
-              <p className="text-white/85 mt-2">
-                You start as the variable <b>x</b>. Pick an <b>assignment gate</b> to give x a value,
-                grow it through <b>+</b> and <b>×</b> gates, dodge the <b>red enemies</b> that subtract,
-                then beat the <b>boss</b> at the end!
+              <p className="font-display text-white font-extrabold text-2xl">Gate Runner</p>
+              <p className="text-white/85 mt-2 text-[15px] leading-snug">
+                You start as the variable <b>x</b>. Pick an <b className="text-primary-light">assignment</b> gate to
+                give x a value, then grow it through <b className="text-lime">+</b> and{' '}
+                <b className="text-cyan">×</b> gates. Watch each step <b>evaluate on your number</b> — and always grab
+                the <b>bigger</b> result!
+              </p>
+              <p className="text-white/85 mt-2 text-[15px] leading-snug">
+                Dodge the <b className="text-coral">red enemies</b> that subtract, keep a <b className="text-amber">combo</b> going,
+                then survive the <b>boss</b>.
               </p>
               <p className="text-white/70 text-sm mt-3">Drag, or use ← → · Tap to start</p>
             </div>
@@ -151,14 +162,19 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
         )}
 
         {status === 'complete' && (
-          <div className="absolute inset-0 flex items-center justify-center px-6">
+          <div className="absolute inset-0 flex items-center justify-center px-6 animate-fadein">
             <div className="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl">
-              <p className="text-3xl">🎉</p>
-              <p className="tracking-[0.25em] text-text-muted text-xs font-bold mt-1">FINISH</p>
-              <p className="text-text text-sm mt-2">Your crowd</p>
-              <p className="text-primary text-5xl font-extrabold tabular-nums leading-none mt-1">
+              <p className="text-3xl">{headlineEmoji}</p>
+              <p className="font-display tracking-[0.25em] text-text-muted text-xs font-bold mt-1">{headline}</p>
+              <p className="text-text text-sm mt-2">Your crowd reached</p>
+              <p className="font-display text-primary text-5xl font-extrabold tabular-nums leading-none mt-1">
                 {finalCount.toLocaleString()}
               </p>
+              {bestCombo >= 2 && (
+                <p className="mt-3 inline-block bg-amber/15 text-amber font-display font-bold text-sm rounded-full px-3 py-1">
+                  🔥 Best combo ×{bestCombo}
+                </p>
+              )}
               <button
                 onClick={onNext}
                 className="mt-5 w-full bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-xl transition-colors"
@@ -174,7 +190,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button
           aria-label="Move left"
-          className="bg-surface border border-black/10 rounded-2xl py-5 text-2xl font-bold shadow-sm active:bg-surface-light"
+          className="font-display bg-surface border border-black/10 rounded-2xl py-5 text-2xl font-bold text-primary shadow-sm active:bg-surface-light active:scale-95 transition-transform"
           onPointerDown={(e) => {
             e.preventDefault();
             engineRef.current?.primary();
@@ -183,11 +199,11 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
           onPointerUp={() => engineRef.current?.setMove('left', false)}
           onPointerLeave={() => engineRef.current?.setMove('left', false)}
         >
-          ←
+          ◀
         </button>
         <button
           aria-label="Move right"
-          className="bg-surface border border-black/10 rounded-2xl py-5 text-2xl font-bold shadow-sm active:bg-surface-light"
+          className="font-display bg-surface border border-black/10 rounded-2xl py-5 text-2xl font-bold text-primary shadow-sm active:bg-surface-light active:scale-95 transition-transform"
           onPointerDown={(e) => {
             e.preventDefault();
             engineRef.current?.primary();
@@ -196,7 +212,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
           onPointerUp={() => engineRef.current?.setMove('right', false)}
           onPointerLeave={() => engineRef.current?.setMove('right', false)}
         >
-          →
+          ▶
         </button>
       </div>
     </div>

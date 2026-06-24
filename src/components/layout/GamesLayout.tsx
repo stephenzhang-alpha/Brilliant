@@ -1,7 +1,9 @@
 import { ReactNode, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { useOverallStore } from '../../stores/overallStore';
+import { RANKS, useOverallStore } from '../../stores/overallStore';
+import { Confetti } from '../score/Confetti';
+import { ScoreChip } from '../score/ScoreHud';
 
 const UNLOCK_INFO: Record<'gates' | 'tower', { label: string }> = {
   gates: { label: 'Gate Runner (Expressions)' },
@@ -13,10 +15,10 @@ const EQUATION_URL = import.meta.env.BASE_URL;
 
 export function GamesLayout({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuthStore();
-  const overall = useOverallStore((s) => s.overall);
-  const lastGain = useOverallStore((s) => s.lastGain);
   const justUnlocked = useOverallStore((s) => s.justUnlocked);
   const clearJustUnlocked = useOverallStore((s) => s.clearJustUnlocked);
+  const justRankedUp = useOverallStore((s) => s.justRankedUp);
+  const clearRankUp = useOverallStore((s) => s.clearRankUp);
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -26,6 +28,13 @@ export function GamesLayout({ children }: { children: ReactNode }) {
     const t = setTimeout(() => clearJustUnlocked(), 4500);
     return () => clearTimeout(t);
   }, [justUnlocked, clearJustUnlocked]);
+
+  // Auto-dismiss the rank-up celebration.
+  useEffect(() => {
+    if (justRankedUp === null) return;
+    const t = setTimeout(() => clearRankUp(), 4200);
+    return () => clearTimeout(t);
+  }, [justRankedUp, clearRankUp]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -68,26 +77,9 @@ export function GamesLayout({ children }: { children: ReactNode }) {
                 Algebra Quest
               </span>
             </Link>
-            <div
-              className="relative flex items-center gap-1.5 bg-gradient-to-r from-amber/20 to-amber/10 border-2 border-amber/40 rounded-full pl-2.5 pr-3 py-1 shrink-0"
-              title="Your total score across all three games"
-            >
-              <span aria-hidden className="text-base">⭐</span>
-              <span
-                key={lastGain?.at ?? 'init'}
-                className={`font-display text-amber font-bold tabular-nums ${lastGain ? 'animate-pop' : ''}`}
-              >
-                {overall.toLocaleString()}
-              </span>
-              {lastGain && (
-                <span
-                  key={`gain-${lastGain.at}`}
-                  className="animate-floatup pointer-events-none absolute -top-4 right-2 text-success font-display font-bold text-sm"
-                >
-                  +{lastGain.points.toLocaleString()}
-                </span>
-              )}
-            </div>
+            <Link to="/leaderboard" className="shrink-0" title="Your rank & total score — view the leaderboard">
+              <ScoreChip />
+            </Link>
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
@@ -120,6 +112,9 @@ export function GamesLayout({ children }: { children: ReactNode }) {
       </nav>
       )}
 
+      <Confetti token={justUnlocked} />
+      <Confetti token={justRankedUp} />
+
       {justUnlocked && (
         <button
           key={justUnlocked}
@@ -132,6 +127,25 @@ export function GamesLayout({ children }: { children: ReactNode }) {
         >
           <span aria-hidden className="text-xl shrink-0">🎉</span>
           <span>New game unlocked: {UNLOCK_INFO[justUnlocked].label} — tap to play!</span>
+        </button>
+      )}
+
+      {justRankedUp !== null && (
+        <button
+          key={`rank-${justRankedUp}`}
+          onClick={() => clearRankUp()}
+          className="animate-toast fixed left-1/2 bottom-6 z-[60] max-w-[92vw] flex items-center gap-3 rounded-2xl px-5 py-3 text-white shadow-2xl"
+          style={{ background: `linear-gradient(90deg, ${RANKS[justRankedUp].color}, #7c3aed)` }}
+        >
+          <span aria-hidden className="animate-rankpop text-3xl shrink-0">
+            {RANKS[justRankedUp].icon}
+          </span>
+          <span className="text-left">
+            <span className="block font-display font-extrabold leading-tight">Rank up!</span>
+            <span className="block text-sm text-white/90">
+              You reached {RANKS[justRankedUp].name}
+            </span>
+          </span>
         </button>
       )}
 

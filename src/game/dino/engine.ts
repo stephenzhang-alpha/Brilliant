@@ -33,6 +33,24 @@ import {
   NIGHT_FADE_SEC,
   COLOR_DAY,
   COLOR_NIGHT,
+  COLOR_HILLS,
+  PARTICLE_POOL_SIZE,
+  DUST_JUMP_COUNT,
+  DUST_LAND_COUNT,
+  DEATH_DEBRIS_COUNT,
+  MILESTONE_BURST_COUNT,
+  CELEBRATION_BURST_COUNT,
+  SQUASH_DECAY,
+  SQUASH_TAKEOFF,
+  SQUASH_LAND,
+  SQUASH_SCALE_X,
+  SQUASH_SCALE_Y,
+  SHAKE_DURATION,
+  SHAKE_MAGNITUDE,
+  DEATH_FLASH_DURATION,
+  DEATH_FLASH_MAX_ALPHA,
+  MILESTONE_POP_DURATION,
+  CHALLENGE_EARLY_BAND,
 } from './constants';
 import {
   drawDino,
@@ -41,6 +59,7 @@ import {
   drawCloud,
   drawMoon,
   drawStar,
+  drawHills,
   CactusSpec,
 } from './sprites';
 
@@ -76,6 +95,38 @@ interface Bump {
   w: number;
 }
 
+/** A pooled particle (dust / confetti / debris). Reused — never re-allocated. */
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  grav: number;
+  drag: number;
+  /** Index into PARTICLE_PALETTE. */
+  color: number;
+  /** 0 = solid square, 1 = spark (shrinks as it fades). */
+  shape: number;
+  active: boolean;
+}
+
+// Brand palette (violet/pink/cyan/green/amber/coral) + two dust tones. Cached
+// as opaque strings; particle fade is applied via ctx.globalAlpha so drawing
+// never allocates a colour string per frame.
+const PARTICLE_PALETTE = [
+  '#7c3aed', // 0 violet
+  '#ec4899', // 1 pink
+  '#06b6d4', // 2 cyan
+  '#22c55e', // 3 green
+  '#f59e0b', // 4 amber
+  '#fb5b6b', // 5 coral
+  '#a99fce', // 6 dust (mid)
+  '#d8cff0', // 7 dust (light)
+];
+
 const BIRD_W = 46;
 const BIRD_H = 30;
 // Heights are relative to the ground so they stay fair regardless of world height.
@@ -97,6 +148,13 @@ function lerpColor(a: string, b: string, t: number): string {
   const g = Math.round(ca[1] + (cb[1] - ca[1]) * t);
   const bl = Math.round(ca[2] + (cb[2] - ca[2]) * t);
   return `rgb(${r}, ${g}, ${bl})`;
+}
+
+/** Smoothstep easing — softens the linear day<->night progress into an S-curve. */
+function smoothstep(x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  return x * x * (3 - 2 * x);
 }
 
 function intersects(a: Box, b: Box): boolean {
@@ -147,11 +205,30 @@ export class DinoGame {
   private lastMilestone = 0;
   private flashTimer = 0;
 
+  // Juice: particle pool, squash & stretch, screen shake, flashes, score pop.
+  private particles: Particle[] = [];
+  private partCursor = 0;
+  private squash = 0;
+  private shakeTimer = 0;
+  private deathFlash = 0;
+  private milestonePopTimer = 0;
+  private milestonePopValue = 0;
+
+  // Extra parallax layers (distant mountains + near hills) scroll offsets.
+  private hillOffsetFar = 0;
+  private hillOffsetNear = 0;
+
+  // Interactive "jump when s reaches the target" tutorial beat.
+  private challengeActive = false;
+  private challengeTarget = 0;
+
   // Callbacks (wired by the React layer)
   onGameOver: ((score: number) => void) | null = null;
   onMilestone: ((score: number) => void) | null = null;
+  onChallengeResult: ((success: boolean, score: number) => void) | null = null;
 
   constructor() {
+    this.initParticles();
     this.initScenery();
   }
 
@@ -190,6 +267,13 @@ export class DinoGame {
     this.flashTimer = 0;
     this.nextSpawnDistance = 280;
     this.highlightScore = false;
+    this.squash = 0;
+    this.shakeTimer = 0;
+    this.deathFlash = 0;
+    this.milestonePopTimer = 0;
+    this.milestonePopValue = 0;
+    this.challengeActive = false;
+    this.deactivateParticles();
     this.initScenery();
   }
 
@@ -217,6 +301,45 @@ export class DinoGame {
     this.status = 'running';
   }
 
+  /**
+   * Arm the interactive "jump when the score s reaches the target" beat used by
+   * the variables mini-lesson. Keeps the dino in the safe free-run state and
+   * restarts the score from zero so the player can watch the variable climb.
+   */
+  armChallenge(target: number) {
+    this.challengeActive = true;
+    this.challengeTarget = target;
+    this.highlightScore = true;
+    this.obstaclesEnabled = false;
+    this.obstacles = [];
+    this.score = 0;
+    this.scoreFloat = 0;
+    this.distance = 0;
+    this.speed = SPEED_START;
+    this.lastMilestone = 0;
+    this.nightT = 0;
+    this.status = 'running';
+    this.onGround = true;
+    this.dinoVy = 0;
+    this.dinoY = GROUND_Y - DINO_HEIGHT;
+  }
+
+  private evaluateChallengeJump() {
+    if (!this.challengeActive) return;
+    // Too early — let them try again as s keeps climbing (no penalty).
+    if (this.score < this.challengeTarget - CHALLENGE_EARLY_BAND) {
+      this.onChallengeResult?.(false, this.score);
+      return;
+    }
+    this.challengeActive = false;
+    this.highlightScore = false;
+    this.shakeTimer = 0;
+    this.spawnCelebration();
+    this.milestonePopTimer = MILESTONE_POP_DURATION;
+    this.milestonePopValue = this.score;
+    this.onChallengeResult?.(true, this.score);
+  }
+
   /** Context-aware primary action: start, jump, or restart. */
   primary() {
     if (this.status === 'ready') {
@@ -236,6 +359,9 @@ export class DinoGame {
     if (this.onGround) {
       this.dinoVy = JUMP_VELOCITY;
       this.onGround = false;
+      this.squash = SQUASH_TAKEOFF; // stretch up off the line
+      this.spawnDust('jump');
+      if (this.challengeActive) this.evaluateChallengeJump();
     }
   }
 
@@ -261,11 +387,18 @@ export class DinoGame {
     const dt = Math.min(dtRaw, 0.05); // guard against huge steps (tab refocus)
     this.tick += dt * 60;
 
+    // Effect timers + particles + squash animate in every state so death
+    // debris keeps flying and the shake/flash finish even after game over.
     if (this.overLock > 0) this.overLock = Math.max(0, this.overLock - dt);
     if (this.flashTimer > 0) this.flashTimer = Math.max(0, this.flashTimer - dt);
+    if (this.shakeTimer > 0) this.shakeTimer = Math.max(0, this.shakeTimer - dt);
+    if (this.deathFlash > 0) this.deathFlash = Math.max(0, this.deathFlash - dt);
+    if (this.milestonePopTimer > 0) this.milestonePopTimer = Math.max(0, this.milestonePopTimer - dt);
+    this.squash += (0 - this.squash) * Math.min(1, dt * SQUASH_DECAY);
+    this.updateParticles(dt);
 
     // Scenery animates in every state so the title screen feels alive.
-    this.updateScenery(dt, this.status === 'running' ? this.speed : SPEED_START * 0.0);
+    this.updateScenery(dt, this.status === 'running' ? this.speed : 0);
 
     if (this.status !== 'running') return;
 
@@ -276,10 +409,13 @@ export class DinoGame {
     this.scoreFloat += move * SCORE_PER_UNIT;
     this.score = Math.floor(this.scoreFloat);
 
-    // Milestone flash
+    // Milestone: flash the score, pop a celebratory number, burst confetti.
     if (this.score >= this.lastMilestone + MILESTONE_INTERVAL) {
       this.lastMilestone = Math.floor(this.score / MILESTONE_INTERVAL) * MILESTONE_INTERVAL;
       this.flashTimer = 0.6;
+      this.milestonePopTimer = MILESTONE_POP_DURATION;
+      this.milestonePopValue = this.lastMilestone;
+      this.spawnMilestoneBurst();
       this.onMilestone?.(this.score);
     }
 
@@ -299,6 +435,8 @@ export class DinoGame {
         this.dinoY = floor;
         this.dinoVy = 0;
         this.onGround = true;
+        this.squash = SQUASH_LAND; // squash down on impact
+        this.spawnDust('land');
       }
     } else {
       this.dinoY = GROUND_Y - (this.isDucking ? DINO_DUCK_HEIGHT : DINO_HEIGHT);
@@ -328,6 +466,15 @@ export class DinoGame {
   }
 
   private updateScenery(dt: number, worldSpeed: number) {
+    // Parallax: far mountains crawl, near hills roll a touch quicker. They keep
+    // a gentle idle drift on the title screen so the scene always breathes.
+    // Offsets wrap at 2400 — a common multiple of both layers' 2x-wavelength
+    // periods (480 + 300, see draw()) — so the loop is perfectly seamless.
+    const hillFarSpeed = worldSpeed > 0 ? worldSpeed * 0.08 : 3;
+    const hillNearSpeed = worldSpeed > 0 ? worldSpeed * 0.22 : 7;
+    this.hillOffsetFar = (this.hillOffsetFar + hillFarSpeed * dt) % 2400;
+    this.hillOffsetNear = (this.hillOffsetNear + hillNearSpeed * dt) % 2400;
+
     // Clouds drift at ~half world speed; idle drift on the title screen.
     const cloudSpeed = worldSpeed > 0 ? worldSpeed * 0.45 : 14;
     for (const c of this.clouds) {
@@ -405,6 +552,10 @@ export class DinoGame {
   private gameOver() {
     this.status = 'over';
     this.overLock = 0.5;
+    this.squash = 0;
+    this.shakeTimer = SHAKE_DURATION;
+    this.deathFlash = DEATH_FLASH_DURATION;
+    this.spawnDeathDebris();
     if (this.score > this.highScore) this.highScore = this.score;
     this.onGameOver?.(this.score);
   }
@@ -412,7 +563,8 @@ export class DinoGame {
   // --- Rendering -----------------------------------------------------------
 
   draw(ctx: CanvasRenderingContext2D) {
-    const t = this.nightT;
+    // Smoothstep the linear night progress into an eased S-curve crossfade.
+    const t = smoothstep(this.nightT);
     const skyTop = lerpColor(COLOR_DAY.skyTop, COLOR_NIGHT.skyTop, t);
     const skyBottom = lerpColor(COLOR_DAY.skyBottom, COLOR_NIGHT.skyBottom, t);
     const groundC = lerpColor(COLOR_DAY.ground, COLOR_NIGHT.ground, t);
@@ -422,30 +574,51 @@ export class DinoGame {
     const cloudC = lerpColor(COLOR_DAY.cloud, COLOR_NIGHT.cloud, t);
     const textC = lerpColor(COLOR_DAY.text, COLOR_NIGHT.text, t);
     const eyeC = lerpColor(COLOR_DAY.eye, COLOR_NIGHT.eye, t);
+    const hillFarC = lerpColor(COLOR_HILLS.farDay, COLOR_HILLS.farNight, t);
+    const hillNearC = lerpColor(COLOR_HILLS.nearDay, COLOR_HILLS.nearNight, t);
 
-    // Sky gradient
+    // Screen shake (death). Eases out; only the world layer is translated —
+    // the HUD stays rock-steady so the numbers remain readable.
+    let shakeX = 0;
+    let shakeY = 0;
+    if (this.shakeTimer > 0) {
+      const k = this.shakeTimer / SHAKE_DURATION;
+      const mag = SHAKE_MAGNITUDE * k * k;
+      shakeX = (Math.random() * 2 - 1) * mag;
+      shakeY = (Math.random() * 2 - 1) * mag;
+    }
+
+    ctx.save();
+    ctx.translate(Math.round(shakeX), Math.round(shakeY));
+
+    // Sky gradient — over-filled so the shake never exposes a bare edge.
     const grad = ctx.createLinearGradient(0, 0, 0, WORLD_HEIGHT);
     grad.addColorStop(0, skyTop);
     grad.addColorStop(1, skyBottom);
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    ctx.fillRect(-16, -16, WORLD_WIDTH + 32, WORLD_HEIGHT + 32);
 
-    // Stars + moon (night)
-    if (t > 0.05) {
+    // Stars + moon fade in with the night for a smooth crossfade.
+    if (t > 0.001) {
+      ctx.globalAlpha = Math.min(1, t * 1.4);
       const starColor = lerpColor('#ffffff', '#fff4c2', t);
       for (const s of this.stars) {
         const twinkle = 0.5 + 0.5 * Math.sin(this.tick * 0.05 + s.phase * 7);
         if (twinkle > 0.45) drawStar(ctx, s.x, s.y, starColor);
       }
       drawMoon(ctx, WORLD_WIDTH - 70, 34, '#fff0a6', skyTop);
+      ctx.globalAlpha = 1;
     }
 
-    // Clouds
+    // Parallax depth: distant hazy mountains (slow) behind the clouds…
+    drawHills(ctx, this.hillOffsetFar, GROUND_Y - 54, 24, 240, GROUND_Y, hillFarC);
     for (const c of this.clouds) drawCloud(ctx, c.x, c.y, cloudC);
+    // …and nearer rolling hills (faster) in front of them.
+    drawHills(ctx, this.hillOffsetNear, GROUND_Y - 22, 12, 150, GROUND_Y, hillNearC);
 
     // Ground
     ctx.fillStyle = groundC;
-    ctx.fillRect(0, GROUND_Y, WORLD_WIDTH, 2);
+    ctx.fillRect(-16, GROUND_Y, WORLD_WIDTH + 32, 2);
     for (const b of this.bumps) ctx.fillRect(Math.round(b.x), GROUND_Y + 4, Math.round(b.w), 2);
 
     // Obstacles — green cacti, pink pterodactyls
@@ -454,12 +627,40 @@ export class DinoGame {
       else drawBird(ctx, o.x, o.y, o.w, o.h, birdC, this.tick);
     }
 
-    // Dino (brand violet)
+    // Dino (brand violet) with squash & stretch anchored at its feet.
     const pose = this.poseForDraw();
-    drawDino(ctx, DINO_X, this.dinoY, dinoC, eyeC, pose, this.tick);
+    const q = this.squash;
+    if (Math.abs(q) > 0.002) {
+      const spriteW = pose === 'duck' ? DINO_DUCK_WIDTH : DINO_WIDTH;
+      const spriteH = pose === 'duck' ? DINO_DUCK_HEIGHT : DINO_HEIGHT;
+      const anchorX = DINO_X + spriteW / 2;
+      const anchorY = this.dinoY + spriteH;
+      ctx.save();
+      ctx.translate(anchorX, anchorY);
+      ctx.scale(1 + q * SQUASH_SCALE_X, 1 - q * SQUASH_SCALE_Y);
+      ctx.translate(-anchorX, -anchorY);
+      drawDino(ctx, DINO_X, this.dinoY, dinoC, eyeC, pose, this.tick);
+      ctx.restore();
+    } else {
+      drawDino(ctx, DINO_X, this.dinoY, dinoC, eyeC, pose, this.tick);
+    }
 
-    // Score + high score (top-right)
+    // Particles (dust, confetti, debris) ride on top of the world layer.
+    this.drawParticles(ctx);
+
+    ctx.restore();
+
+    // HUD — drawn outside the shake transform so it stays crisp.
     this.drawScore(ctx, textC);
+    this.drawMilestonePop(ctx);
+
+    // Death red flash, full-screen above everything.
+    if (this.deathFlash > 0) {
+      ctx.globalAlpha = (this.deathFlash / DEATH_FLASH_DURATION) * DEATH_FLASH_MAX_ALPHA;
+      ctx.fillStyle = '#fb5b6b';
+      ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+      ctx.globalAlpha = 1;
+    }
   }
 
   private poseForDraw(): 'idle' | 'run' | 'jump' | 'duck' | 'dead' {
@@ -504,5 +705,176 @@ export class DinoGame {
       ctx.globalAlpha = 1;
     }
     ctx.textAlign = 'left';
+  }
+
+  // --- Juice: particle pool + score pop ------------------------------------
+
+  private initParticles() {
+    this.particles = new Array(PARTICLE_POOL_SIZE);
+    for (let i = 0; i < PARTICLE_POOL_SIZE; i++) {
+      this.particles[i] = {
+        x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 1,
+        size: 2, grav: 0, drag: 0, color: 6, shape: 0, active: false,
+      };
+    }
+  }
+
+  private deactivateParticles() {
+    for (let i = 0; i < this.particles.length; i++) this.particles[i].active = false;
+    this.partCursor = 0;
+  }
+
+  /** Reuse the next slot in the ring buffer — never allocates a new object. */
+  private spawnParticle(
+    x: number, y: number, vx: number, vy: number,
+    life: number, size: number, grav: number, drag: number,
+    color: number, shape: number,
+  ) {
+    const p = this.particles[this.partCursor];
+    this.partCursor = (this.partCursor + 1) % PARTICLE_POOL_SIZE;
+    p.x = x; p.y = y; p.vx = vx; p.vy = vy;
+    p.life = life; p.maxLife = life; p.size = size;
+    p.grav = grav; p.drag = drag; p.color = color; p.shape = shape;
+    p.active = true;
+  }
+
+  private updateParticles(dt: number) {
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      if (!p.active) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        p.active = false;
+        continue;
+      }
+      if (p.drag > 0) {
+        const f = Math.max(0, 1 - p.drag * dt);
+        p.vx *= f;
+        p.vy *= f;
+      }
+      p.vy += p.grav * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  private drawParticles(ctx: CanvasRenderingContext2D) {
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      if (!p.active) continue;
+      const k = p.life / p.maxLife;
+      ctx.globalAlpha = k < 0 ? 0 : k > 1 ? 1 : k;
+      ctx.fillStyle = PARTICLE_PALETTE[p.color];
+      const s = p.shape === 1 ? p.size * (0.4 + 0.6 * k) : p.size;
+      const hs = s / 2;
+      ctx.fillRect(Math.round(p.x - hs), Math.round(p.y - hs), Math.max(1, Math.round(s)), Math.max(1, Math.round(s)));
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  private spawnDust(kind: 'jump' | 'land') {
+    const baseX = DINO_X + DINO_WIDTH / 2;
+    const baseY = GROUND_Y - 1;
+    const n = kind === 'jump' ? DUST_JUMP_COUNT : DUST_LAND_COUNT;
+    for (let i = 0; i < n; i++) {
+      let vx: number;
+      let vy: number;
+      if (kind === 'jump') {
+        vx = -rand(30, 140); // kicked back as the dino leaps forward
+        vy = -rand(20, 70);
+      } else {
+        const dir = i % 2 === 0 ? -1 : 1; // sprays both ways on impact
+        vx = dir * rand(40, 160);
+        vy = -rand(30, 95);
+      }
+      this.spawnParticle(
+        baseX + rand(-6, 6),
+        baseY - rand(0, 4),
+        vx, vy,
+        rand(0.26, 0.5),
+        rand(2, 4),
+        560, 2.2,
+        Math.random() < 0.5 ? 6 : 7,
+        0,
+      );
+    }
+  }
+
+  private spawnMilestoneBurst() {
+    const x = WORLD_WIDTH - 30;
+    const y = 16;
+    for (let i = 0; i < MILESTONE_BURST_COUNT; i++) {
+      this.spawnParticle(
+        x + rand(-10, 10),
+        y + rand(-4, 8),
+        rand(-130, 130),
+        -rand(40, 180),
+        rand(0.6, 1.0),
+        rand(2, 4),
+        360, 0.5,
+        Math.floor(rand(0, 6)),
+        Math.random() < 0.45 ? 1 : 0,
+      );
+    }
+  }
+
+  private spawnCelebration() {
+    const x = DINO_X + DINO_WIDTH / 2;
+    const y = this.dinoY + DINO_HEIGHT / 2;
+    for (let i = 0; i < CELEBRATION_BURST_COUNT; i++) {
+      const ang = rand(0, Math.PI * 2);
+      const sp = rand(70, 240);
+      this.spawnParticle(
+        x, y,
+        Math.cos(ang) * sp,
+        Math.sin(ang) * sp - 60,
+        rand(0.7, 1.2),
+        rand(2, 5),
+        330, 0.5,
+        Math.floor(rand(0, 6)),
+        Math.random() < 0.5 ? 1 : 0,
+      );
+    }
+  }
+
+  private spawnDeathDebris() {
+    const x = DINO_X + DINO_WIDTH / 2;
+    const y = this.dinoY + DINO_HEIGHT / 2;
+    for (let i = 0; i < DEATH_DEBRIS_COUNT; i++) {
+      const ang = rand(-Math.PI, 0); // upward hemisphere
+      const sp = rand(80, 240);
+      this.spawnParticle(
+        x, y,
+        Math.cos(ang) * sp,
+        Math.sin(ang) * sp,
+        rand(0.4, 0.75),
+        rand(2, 4),
+        720, 0.8,
+        i % 3 === 0 ? 5 : i % 3 === 1 ? 0 : 1, // coral / violet / pink
+        0,
+      );
+    }
+  }
+
+  private drawMilestonePop(ctx: CanvasRenderingContext2D) {
+    if (this.milestonePopTimer <= 0) return;
+    const k = this.milestonePopTimer / MILESTONE_POP_DURATION; // 1 -> 0
+    const appear = 1 - k;
+    const x = WORLD_WIDTH - 34;
+    const y = 40 - appear * 18;
+    const scale = 0.7 + appear * 0.6;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, k * 1.6);
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.font = '800 18px "Fredoka", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText(`${this.milestonePopValue}!`, 0, 0);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
   }
 }

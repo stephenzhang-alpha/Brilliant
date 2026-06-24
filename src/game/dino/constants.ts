@@ -59,6 +59,39 @@ export const NIGHT_INTERVAL = 700;
 /** Seconds for a full day<->night crossfade. */
 export const NIGHT_FADE_SEC = 1.2;
 
+// --- Game feel / juice ----------------------------------------------------
+/** Fixed-size particle pool (dust, confetti, debris) — no per-frame allocs. */
+export const PARTICLE_POOL_SIZE = 96;
+export const DUST_JUMP_COUNT = 7;
+export const DUST_LAND_COUNT = 9;
+export const DEATH_DEBRIS_COUNT = 16;
+export const MILESTONE_BURST_COUNT = 16;
+export const CELEBRATION_BURST_COUNT = 26;
+
+/** Squash & stretch: how fast the dino springs back to neutral (per second). */
+export const SQUASH_DECAY = 9;
+/** Negative = stretched tall/thin on takeoff; positive = squashed on landing. */
+export const SQUASH_TAKEOFF = -0.45;
+export const SQUASH_LAND = 0.6;
+/** How strongly the squash value maps to vertical / horizontal scale. */
+export const SQUASH_SCALE_Y = 0.3;
+export const SQUASH_SCALE_X = 0.22;
+
+// Death feedback.
+export const SHAKE_DURATION = 0.42;
+export const SHAKE_MAGNITUDE = 7;
+export const DEATH_FLASH_DURATION = 0.5;
+export const DEATH_FLASH_MAX_ALPHA = 0.5;
+
+/** Seconds the celebratory milestone number "pops" near the score. */
+export const MILESTONE_POP_DURATION = 0.95;
+
+// --- Variables mini-lesson (interactive beat) -----------------------------
+/** The score value the player is asked to jump at during the tutorial. */
+export const CHALLENGE_TARGET = 50;
+/** Forgiving window: a jump within this many points below the target counts. */
+export const CHALLENGE_EARLY_BAND = 8;
+
 // --- Palette --------------------------------------------------------------
 // Vibrant, on-brand palette (shared family with Gate Runner + Tower).
 export const COLOR_DAY = {
@@ -82,4 +115,12 @@ export const COLOR_NIGHT = {
   cloud: '#6b6391',
   text: '#ece8ff',
   eye: '#241b54',
+};
+
+// Distant parallax layers — hazy mountains (far) and rolling hills (near).
+export const COLOR_HILLS = {
+  farDay: '#aebbe8',
+  farNight: '#322a6b',
+  nearDay: '#bce6c4',
+  nearNight: '#356a5f',
 };
