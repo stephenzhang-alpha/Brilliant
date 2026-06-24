@@ -76,9 +76,11 @@ interface DinoGameProps {
   getDeathOffer?: () => DeathOffer | null;
   /** Called with the run's score each time the player dies (feeds overall score). */
   onRunScore?: (score: number) => void;
+  /** When false (scrolled off-screen), the simulation freezes to save CPU. */
+  active?: boolean;
 }
 
-export function DinoGame({ getDeathOffer, onRunScore }: DinoGameProps = {}) {
+export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const [status, setStatus] = useState<GameStatus>('ready');
@@ -96,10 +98,12 @@ export function DinoGame({ getDeathOffer, onRunScore }: DinoGameProps = {}) {
   const getDeathOfferRef = useRef(getDeathOffer);
   const onRunScoreRef = useRef(onRunScore);
   const tutorialStepRef = useRef(tutorialStep);
+  const activeRef = useRef(active);
   useEffect(() => {
     getDeathOfferRef.current = getDeathOffer;
     onRunScoreRef.current = onRunScore;
     tutorialStepRef.current = tutorialStep;
+    activeRef.current = active;
   });
 
   // Tutorial timers (run-a-bit delay + live score ticker).
@@ -150,14 +154,16 @@ export function DinoGame({ getDeathOffer, onRunScore }: DinoGameProps = {}) {
     const loop = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
-      engine.highScore = Math.max(engine.highScore, useScoresStore.getState().best);
-      engine.update(dt);
-      engine.draw(ctx);
-      if (engine.status !== lastStatus) {
-        lastStatus = engine.status;
-        setStatus(engine.status);
+      if (activeRef.current) {
+        engine.highScore = Math.max(engine.highScore, useScoresStore.getState().best);
+        engine.update(dt);
+        engine.draw(ctx);
+        if (engine.status !== lastStatus) {
+          lastStatus = engine.status;
+          setStatus(engine.status);
+        }
+        if (import.meta.env.DEV) publishDebugState(canvas, engine);
       }
-      if (import.meta.env.DEV) publishDebugState(canvas, engine);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -168,7 +174,7 @@ export function DinoGame({ getDeathOffer, onRunScore }: DinoGameProps = {}) {
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTyping()) return;
+      if (isTyping() || !activeRef.current) return;
       // During the Play/Welcome steps the buttons drive progression.
       const ts = tutorialStepRef.current;
       if (ts === 'play' || ts === 'welcome') return;
@@ -181,6 +187,7 @@ export function DinoGame({ getDeathOffer, onRunScore }: DinoGameProps = {}) {
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      if (!activeRef.current) return;
       if (isJumpEvent(e)) engine.releaseJump();
       else if (isDuckEvent(e)) engine.setDuck(false);
     };

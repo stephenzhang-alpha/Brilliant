@@ -1,9 +1,7 @@
 import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GamesLayout } from './components/layout/GamesLayout';
-import { PlayPage } from './pages/Play';
-import { GatesPage } from './pages/Gates';
-import { TowerPage } from './pages/Tower';
+import { JourneyPage } from './pages/Journey';
 import { LeaderboardPage } from './pages/Leaderboard';
 import { LoginPage } from './pages/Login';
 import { SignupPage } from './pages/Signup';
@@ -34,9 +32,7 @@ export default function GamesApp() {
     <HashRouter>
       <GamesLayout>
         <Routes>
-          <Route path="/" element={<PlayPage />} />
-          <Route path="/gates" element={<GatesPage />} />
-          <Route path="/tower" element={<TowerPage />} />
+          <Route path="/" element={<JourneyPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />

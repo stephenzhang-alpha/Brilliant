@@ -7,17 +7,23 @@ interface Props {
   /** Action for the "Next" button on the completion screen. */
   onNext: () => void;
   nextLabel?: string;
+  /** When false (scrolled off-screen), the simulation freezes to save CPU. */
+  active?: boolean;
 }
 
 const LEFT_KEYS = new Set(['ArrowLeft', 'KeyA']);
 const RIGHT_KEYS = new Set(['ArrowRight', 'KeyD']);
 const START_KEYS = new Set(['Space', 'Enter', 'ArrowUp', 'KeyW']);
 
-export function GateRunner({ onFinish, onNext, nextLabel = 'Next →' }: Props) {
+export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = true }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const [status, setStatus] = useState<GateStatus>('ready');
   const [finalCount, setFinalCount] = useState(0);
+  const activeRef = useRef(active);
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -43,14 +49,16 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →' }: Props) 
     const loop = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
-      engine.update(dt);
-      engine.draw(ctx);
-      if (engine.status !== lastStatus) {
-        lastStatus = engine.status;
-        setStatus(engine.status);
-      }
-      if (import.meta.env.DEV) {
-        canvas.dataset.gates = JSON.stringify(engine.debugSnapshot());
+      if (activeRef.current) {
+        engine.update(dt);
+        engine.draw(ctx);
+        if (engine.status !== lastStatus) {
+          lastStatus = engine.status;
+          setStatus(engine.status);
+        }
+        if (import.meta.env.DEV) {
+          canvas.dataset.gates = JSON.stringify(engine.debugSnapshot());
+        }
       }
       raf = requestAnimationFrame(loop);
     };
@@ -61,7 +69,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →' }: Props) 
       return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTyping()) return;
+      if (isTyping() || !activeRef.current) return;
       if (LEFT_KEYS.has(e.code)) {
         e.preventDefault();
         engine.primary();
@@ -76,6 +84,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →' }: Props) 
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      if (!activeRef.current) return;
       if (LEFT_KEYS.has(e.code)) engine.setMove('left', false);
       else if (RIGHT_KEYS.has(e.code)) engine.setMove('right', false);
     };

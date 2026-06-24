@@ -3,9 +3,9 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useOverallStore } from '../../stores/overallStore';
 
-const UNLOCK_INFO: Record<'gates' | 'tower', { label: string; to: string }> = {
-  gates: { label: 'Gate Runner (Expressions)', to: '/gates' },
-  tower: { label: 'Algebra Tower (Equations & Inequalities)', to: '/tower' },
+const UNLOCK_INFO: Record<'gates' | 'tower', { label: string }> = {
+  gates: { label: 'Gate Runner (Expressions)' },
+  tower: { label: 'Algebra Tower (Equations & Inequalities)' },
 };
 
 // Full-page link back to the separate Project Equation course app.
@@ -14,8 +14,6 @@ const EQUATION_URL = import.meta.env.BASE_URL;
 export function GamesLayout({ children }: { children: ReactNode }) {
   const { user, signOut } = useAuthStore();
   const overall = useOverallStore((s) => s.overall);
-  const gatesUnlocked = useOverallStore((s) => s.gatesUnlocked);
-  const towerUnlocked = useOverallStore((s) => s.towerUnlocked);
   const lastGain = useOverallStore((s) => s.lastGain);
   const justUnlocked = useOverallStore((s) => s.justUnlocked);
   const clearJustUnlocked = useOverallStore((s) => s.clearJustUnlocked);
@@ -34,9 +32,9 @@ export function GamesLayout({ children }: { children: ReactNode }) {
     navigate('/');
   };
 
-  // Game routes render full-screen immersive (GameShell supplies its own slim
-  // floating bar), so the standard site nav is hidden there.
-  const isGameRoute = pathname === '/' || pathname === '/gates' || pathname === '/tower';
+  // The journey ("/") renders full-screen immersive with its own floating bar,
+  // so the standard site nav is hidden there.
+  const isGameRoute = pathname === '/';
 
   const navLink = (to: string, label: string, locked = false) => {
     const active = pathname === to;
@@ -93,9 +91,7 @@ export function GamesLayout({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
-            {navLink('/', 'Dino')}
-            {navLink('/gates', 'Gates', !gatesUnlocked)}
-            {navLink('/tower', 'Tower', !towerUnlocked)}
+            {navLink('/', 'Play')}
             {navLink('/leaderboard', 'Ranks')}
             <a
               href={EQUATION_URL}
@@ -128,9 +124,9 @@ export function GamesLayout({ children }: { children: ReactNode }) {
         <button
           key={justUnlocked}
           onClick={() => {
-            const to = UNLOCK_INFO[justUnlocked].to;
+            const id = justUnlocked;
             clearJustUnlocked();
-            navigate(to);
+            document.querySelector(`[data-section="${id}"]`)?.scrollIntoView({ behavior: 'smooth' });
           }}
           className="animate-toast fixed left-1/2 top-20 z-[60] max-w-[92vw] bg-gradient-to-r from-primary to-accent text-white font-display font-semibold px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-2 text-left"
         >
