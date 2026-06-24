@@ -43,7 +43,8 @@ export type InteractionType =
   | 'NUMBER_INPUT'
   | 'EXPRESSION_BUILDER'
   | 'SLIDER_GRAPH'
-  | 'INTERSECTION_SCRUB';
+  | 'INTERSECTION_SCRUB'
+  | 'EQUATION_LAB';
 
 export interface ValidationRule {
   type: 'exact' | 'expression' | 'range' | 'custom';
@@ -197,4 +198,18 @@ export interface StreakData {
   longest: number;
   lastActivityDate: string;
   history: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Dino runner — leaderboard
+// ---------------------------------------------------------------------------
+
+/** One row in the global high-score leaderboard (`dinoScores/{uid}`). */
+export interface LeaderboardEntry {
+  uid: string;
+  /** Public display handle (never the user's email). */
+  name: string;
+  score: number;
+  /** ISO timestamp of when the best score was last updated. */
+  updatedAt?: string;
 }

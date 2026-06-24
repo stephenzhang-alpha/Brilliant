@@ -14,7 +14,7 @@ export function LoginForm() {
     setSubmitting(true);
     try {
       await signIn(email, password);
-      navigate('/course');
+      navigate('/');
     } catch {
       // error is set in store
     } finally {
@@ -39,7 +39,7 @@ export function LoginForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-surface border border-white/10 rounded-lg px-4 py-2.5 text-text focus:outline-none focus:border-primary-light transition-colors"
+              className="w-full bg-surface border border-black/10 rounded-lg px-4 py-2.5 text-text focus:outline-none focus:border-primary-light transition-colors"
               required
             />
           </div>
@@ -49,7 +49,7 @@ export function LoginForm() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-surface border border-white/10 rounded-lg px-4 py-2.5 text-text focus:outline-none focus:border-primary-light transition-colors"
+              className="w-full bg-surface border border-black/10 rounded-lg px-4 py-2.5 text-text focus:outline-none focus:border-primary-light transition-colors"
               required
             />
           </div>

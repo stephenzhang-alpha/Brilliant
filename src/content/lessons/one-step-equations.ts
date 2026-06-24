@@ -106,6 +106,49 @@ const lesson: Lesson = {
       },
     },
     {
+      id: 'onestep-drag-4',
+      type: 'problem',
+      interactionType: 'TERM_DRAG',
+      prompt: 'Solve for x: x - 6 = 4. Drag the -6 to isolate x.',
+      hints: [
+        'Move the -6 to the right side, where it becomes +6.',
+        'x = 4 + 6 = 10.',
+      ],
+      validationRule: { type: 'exact', answer: 10 },
+      remediation: {
+        wrong_answer: 'Moving -6 across makes it +6. So x = 4 + 6 = 10.',
+        sign_error: 'When a negative term crosses the equals sign, it becomes positive.',
+        empty: 'Drag the -6 term across the equals sign.',
+      },
+      problemConfig: {
+        equation: {
+          left: [
+            { id: 'x', coefficient: 1, variable: 'x', isConstant: false },
+            { id: 'c1', coefficient: -6, isConstant: true },
+          ],
+          right: [{ id: 'c2', coefficient: 4, isConstant: true }],
+          targetVariable: 'x',
+          targetValue: 10,
+        },
+      },
+    },
+    {
+      id: 'onestep-input-1',
+      type: 'problem',
+      interactionType: 'NUMBER_INPUT',
+      prompt: 'Solve for x: 4x = 20. What is x?',
+      hints: ['x is multiplied by 4 — do the inverse.', 'Divide both sides by 4: x = 20 ÷ 4.'],
+      validationRule: { type: 'exact', answer: 5 },
+      remediation: {
+        wrong_answer: 'Undo the multiplication by dividing both sides by 4: x = 20 ÷ 4 = 5.',
+        off_by_one: 'Almost — recheck 20 ÷ 4.',
+        empty: 'Enter your answer.',
+      },
+      problemConfig: {
+        numberInput: { correctAnswer: 5, placeholder: 'x = ?' },
+      },
+    },
+    {
       id: 'onestep-synthesis',
       type: 'synthesis',
       prompt: 'Excellent!',

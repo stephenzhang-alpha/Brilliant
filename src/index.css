@@ -1,27 +1,67 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #4f46e5;
-  --color-primary-dark: #4338ca;
-  --color-primary-light: #818cf8;
-  --color-success: #10b981;
+  /* Brand — one vibrant, playful identity shared across all three games */
+  --color-primary: #7c3aed;        /* violet */
+  --color-primary-dark: #6d28d9;
+  --color-primary-light: #8b5cf6;
+  --color-accent: #ec4899;         /* pink */
+  --color-cyan: #06b6d4;
+  --color-lime: #22c55e;
+  --color-amber: #f59e0b;
+  --color-coral: #fb5b6b;
+  --color-success: #16a34a;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
-  --color-surface: #1e1b4b;
-  --color-surface-light: #312e81;
-  --color-bg: #0f0e1a;
-  --color-text: #f8fafc;
-  --color-text-muted: #94a3b8;
+
+  /* Light, friendly surfaces */
+  --color-surface: #ffffff;
+  --color-surface-light: #f1ecfe;
+  --color-bg: #f3f0ff;
+  --color-text: #2a2350;
+  --color-text-muted: #6f6691;
+
+  --font-display: "Fredoka", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
 
+html, body { margin: 0; min-height: 100%; }
+
 body {
-  margin: 0;
-  background-color: var(--color-bg);
+  background: linear-gradient(160deg, #f4f0ff 0%, #ecf6ff 48%, #fdeffb 100%) fixed;
   color: var(--color-text);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-* {
-  box-sizing: border-box;
+/* Headings and the score/HUD use the rounded, friendly display font. */
+h1, h2, h3, .font-display { font-family: var(--font-display); }
+
+* { box-sizing: border-box; }
+
+/* Juicy "pressable" buttons — a chunky shadow that compresses on tap. */
+.btn-pop {
+  box-shadow: 0 4px 0 0 rgba(76, 29, 149, 0.35);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
 }
+.btn-pop:hover { filter: brightness(1.05); }
+.btn-pop:active { transform: translateY(3px); box-shadow: 0 1px 0 0 rgba(76, 29, 149, 0.35); }
+
+@keyframes float-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.animate-bob { animation: float-bob 2.6s ease-in-out infinite; }
+
+/* Smooth route + UI transitions */
+@keyframes fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.animate-fadein { animation: fade-in 0.3s ease both; }
+
+@keyframes score-pop { 0% { transform: scale(1); } 35% { transform: scale(1.4); } 100% { transform: scale(1); } }
+.animate-pop { animation: score-pop 0.5s ease; }
+
+@keyframes float-up { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-26px); } }
+.animate-floatup { animation: float-up 1s ease forwards; }
+
+@keyframes toast-in {
+  0% { opacity: 0; transform: translate(-50%, -18px) scale(0.95); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.animate-toast { animation: toast-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }

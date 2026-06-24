@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Algebra Quest</title>
+    <!--
+      SPA fallback for GitHub Pages: GH Pages has no server-side rewrite, so a
+      hard refresh / direct link to a client route (e.g. /Brilliant/gates) would
+      404. This redirects to the app root, encoding the original path so
+      index.html can restore it. (rafgraph/spa-github-pages technique.)
+      pathSegmentsToKeep = 1 matches the project base path "/<repo>/".
+    -->
+    <script>
+      (function () {
+        var pathSegmentsToKeep = 1;
+        var l = window.location;
+        l.replace(
+          l.protocol +
+            '//' +
+            l.hostname +
+            (l.port ? ':' + l.port : '') +
+            l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') +
+            '/?/' +
+            l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+            (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+            l.hash
+        );
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Algebra Tower Battler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#f3f0ff; --bg2:#ecf6ff; --panel:#ffffff; --panel2:#f5f1ff;
+  --line:rgba(42,35,80,.12); --text:#2a2350; --muted:#6f6691;
+  --player:#7c3aed; --player2:#06b6d4; --enemy:#ef4444; --enemy2:#dc2626;
+  --gold:#f59e0b; --gold2:#d97706; --good:#16a34a; --shadow:rgba(124,58,237,.22);
+  --fun:"Fredoka","Inter",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:linear-gradient(160deg,#f4f0ff,#ecf6ff 50%,#fdeffb);
+  color:var(--text); font-family:'Inter',system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased; overflow-x:hidden;
+}
+.title,.hp .val,.card h1,.panel h2,.interaction .kicker,.choice{font-family:var(--fun)}
+.app{max-width:1180px;margin:0 auto;padding:16px;min-height:100%}
+header.bar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:linear-gradient(90deg,var(--panel),var(--panel2));
+  border:1px solid var(--line);border-radius:16px;padding:12px 18px;margin-bottom:14px;
+}
+.title{font-size:22px;font-weight:800;letter-spacing:.5px}
+.title .accent{color:var(--player)}
+.hp{display:flex;align-items:center;gap:10px}
+.hp .label{color:var(--muted);font-size:13px}
+.hp .val{
+  font-size:28px;font-weight:700;color:var(--player);
+  min-width:54px;text-align:center;
+}
+.hp .val.pop{animation:pop .4s ease}
+.btn{
+  border:0;border-radius:14px;padding:11px 18px;font-weight:700;cursor:pointer;
+  font-size:14px;color:#fff;background:var(--player);font-family:var(--fun);
+  box-shadow:0 4px 0 0 rgba(76,29,149,.30);transition:transform .08s,box-shadow .08s,filter .15s;
+}
+.btn:hover{filter:brightness(1.06)}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 0 rgba(76,29,149,.30)}
+.btn.ghost{background:#efe9fe;color:var(--muted);box-shadow:0 4px 0 0 rgba(42,35,80,.12)}
+.btn.gold{background:var(--gold);color:#3a2400;box-shadow:0 4px 0 0 rgba(180,83,9,.35)}
+.btn.danger{background:var(--enemy);color:#fff;box-shadow:0 4px 0 0 rgba(153,27,27,.35)}
+
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px}
+.panel h2{margin:0 0 10px;font-size:15px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+
+/* Tower */
+.tower{display:flex;flex-direction:column;gap:0}
+.roof,.floor,.gate{position:relative}
+.floor{display:grid;grid-template-columns:1fr 64px 1fr;gap:10px;align-items:center;padding:10px 8px}
+.floor.active{background:linear-gradient(180deg,rgba(56,189,248,.10),transparent);border-radius:14px}
+.floor .ftag{position:absolute;left:8px;top:4px;font-size:11px;color:var(--muted);letter-spacing:1px}
+.room{
+  height:96px;border-radius:14px;border:1px solid var(--line);background:var(--panel2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  cursor:not-allowed;opacity:.55;transition:transform .12s,box-shadow .2s,opacity .2s;user-select:none;
+}
+.room .emoji{font-size:30px;line-height:1}
+.room .name{font-size:12px;color:var(--muted)}
+.room .pwr{font-size:13px;font-weight:800}
+.room.enemy .pwr{color:var(--enemy)}
+.room.item .pwr{color:var(--gold)}
+.room.accessible{opacity:1;cursor:pointer;border-color:var(--player)}
+.room.accessible.enemy{border-color:var(--enemy);box-shadow:0 0 16px rgba(251,91,107,.35)}
+.room.accessible.item{border-color:var(--gold);box-shadow:0 0 16px rgba(251,191,36,.35)}
+.room.accessible:hover{transform:translateY(-3px)}
+.room.cleared{opacity:.25;cursor:default;border-style:dashed}
+.room.cleared .emoji{filter:grayscale(1)}
+.room.defeat{animation:defeat .5s ease forwards}
+.hero{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  opacity:0;transition:opacity .25s;
+}
+.hero.show{opacity:1}
+.hero .float{font-size:15px;font-weight:900;color:var(--player);text-shadow:0 0 10px rgba(56,189,248,.7)}
+.hero .ava{font-size:30px;filter:drop-shadow(0 0 10px rgba(56,189,248,.6))}
+.gate{
+  height:42px;margin:4px 6px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:repeating-linear-gradient(45deg,#fff4d6,#fff4d6 10px,#ffe9b0 10px,#ffe9b0 20px);
+  border:1px solid var(--gold2);color:var(--gold2);font-weight:800;font-size:13px;opacity:.55;cursor:not-allowed;
+}
+.gate.open{opacity:.3;border-style:dashed;text-decoration:line-through}
+.gate.active{opacity:1;cursor:pointer;box-shadow:0 0 18px rgba(251,191,36,.45);animation:glow 1.6s infinite}
+.gate.active:hover{filter:brightness(1.1)}
+.roof{
+  height:120px;border-radius:16px;margin-bottom:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  background:linear-gradient(180deg,#fff1f2,#ffe0e4);border:2px solid var(--enemy);opacity:.55;cursor:not-allowed;
+}
+.roof .emoji{font-size:44px}
+.roof .pwr{color:var(--enemy);font-weight:800}
+.roof.accessible{opacity:1;cursor:pointer;box-shadow:0 0 26px rgba(239,68,68,.5);animation:glow 1.4s infinite}
+.roof.accessible:hover{filter:brightness(1.08)}
+
+/* Right: Math Ledger */
+.interaction{
+  background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:16px;min-height:210px;
+}
+.interaction .kicker{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.interaction .kicker.enemy{color:var(--enemy)}
+.interaction .kicker.gold{color:var(--gold)}
+.interaction .prompt{font-size:15px;color:var(--text);line-height:1.5}
+.eqn{
+  font-family:'Cambria Math','Georgia',serif;font-size:30px;font-weight:700;text-align:center;
+  margin:14px 0;letter-spacing:1px;
+}
+.eqn .x{color:var(--gold)}
+.eqn .h{color:var(--player)}
+.eqn .e{color:var(--enemy)}
+.tablet{
+  text-align:center;font-size:14px;color:var(--gold);background:rgba(251,191,36,.08);
+  border:1px dashed var(--gold2);border-radius:10px;padding:8px;margin:8px 0;
+}
+.choices{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.choice{
+  min-width:70px;font-size:20px;font-weight:800;padding:12px 16px;border-radius:12px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);color:var(--text);transition:transform .08s,border-color .15s;
+}
+.choice:hover{border-color:var(--player);transform:translateY(-2px)}
+.choice.gold:hover{border-color:var(--gold)}
+.actions{display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.warn{margin-top:10px;color:var(--enemy);font-weight:700;text-align:center;font-size:14px}
+.idle-hint{color:var(--muted);font-size:14px;line-height:1.6}
+.idle-hint b{color:var(--text)}
+
+.ledger{margin-top:14px}
+.ledger h3{margin:0 0 8px;font-size:13px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+#log{list-style:none;margin:0;padding:0;max-height:230px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+#log li{
+  font-family:'Cambria Math','Georgia',serif;font-size:14px;background:var(--panel2);
+  border:1px solid var(--line);border-left:3px solid var(--player);border-radius:8px;padding:7px 10px;animation:slideIn .25s ease;
+}
+#log li.gate{border-left-color:var(--gold)}
+#log li.bad{border-left-color:var(--enemy)}
+#log li.win{border-left-color:var(--good)}
+#log .muted{color:var(--muted)}
+
+/* Overlays */
+.overlay{
+  position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:50;
+  background:rgba(43,35,80,.45);backdrop-filter:blur(4px);padding:20px;
+}
+.overlay.show{display:flex}
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+  border-radius:20px;padding:30px;text-align:center;max-width:440px;box-shadow:0 20px 60px var(--shadow);
+}
+.card h1{margin:.2em 0;font-size:30px}
+.card.win h1{color:var(--gold2)}
+.card.lose h1{color:var(--enemy)}
+.card p{color:var(--muted);line-height:1.6}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:60;display:none}
+.shake{animation:shake .4s}
+
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes glow{0%,100%{box-shadow:0 0 12px rgba(251,191,36,.3)}50%{box-shadow:0 0 26px rgba(251,191,36,.7)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(10px)}60%{transform:translateX(-7px)}80%{transform:translateX(7px)}}
+@keyframes defeat{0%{transform:scale(1) rotate(0)}40%{transform:scale(1.15) rotate(6deg)}100%{transform:scale(0) rotate(40deg);opacity:0}}
+@keyframes slideIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+@media (max-width:820px){
+  .split{grid-template-columns:1fr}
+  .title{font-size:18px}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="bar">
+    <div class="title">⚔️ Algebra <span class="accent">Tower Battler</span></div>
+    <div class="hp">
+      <span class="label">HERO POWER</span>
+      <span class="val" id="hpVal">10</span>
+      <button class="btn ghost" id="resetBtn" title="Restart the tower">Reset</button>
+    </div>
+  </header>
+
+  <div class="split">
+    <section class="panel" aria-label="Tower">
+      <h2>The Tower</h2>
+      <div class="tower" id="tower"><!-- floors rendered by JS --></div>
+    </section>
+
+    <section class="panel" aria-label="Math Ledger">
+      <h2>Math Ledger</h2>
+      <div class="interaction" id="interaction"><!-- active prompt --></div>
+      <div class="ledger">
+        <h3>History</h3>
+        <ol id="log"></ol>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- Win / Lose overlay -->
+<div class="overlay" id="overlay">
+  <div class="card" id="overlayCard">
+    <h1 id="overlayTitle"></h1>
+    <p id="overlayText"></p>
+    <button class="btn" id="overlayBtn">Play Again</button>
+  </div>
+</div>
+<canvas id="confetti"></canvas>
+
+<script>
+/* =========================================================================
+   ALGEBRA TOWER BATTLER  — single-file educational math game
+   Teaches: inequalities (H > E), expression evaluation, and 1- & 2-step
+   equations. Pure vanilla JS, no dependencies.
+   ========================================================================= */
+
+"use strict";
+
+/* ---------------------------------------------------------------- DATA ---
+   The tower is built bottom -> top. Floors 1-3 each hold two rooms; the roof
+   holds the Dragon boss. Gates sit between floors and are unlocked by solving
+   an equation for x. Mystery enemies hide their power behind an expression
+   the player must evaluate first. */
+const FLOORS = [
+  { level: 1, theme: "Inequalities", rooms: [
+    { id: "1A", kind: "enemy", name: "Goblin", emoji: "👺", power: 5 },
+    { id: "1B", kind: "enemy", name: "Wolf",   emoji: "🐺", power: 8 },
+  ]},
+  { level: 2, theme: "Expressions", rooms: [
+    // Orc power is the expression 2x + 3 with x = 5  ->  13
+    { id: "2A", kind: "enemy", name: "Orc", emoji: "👹",
+      expr: { a: 2, b: 3, x: 5, text: "2x + 3", choices: [10, 13, 16] } },
+    { id: "2B", kind: "item", name: "Chest", emoji: "🎁", add: 11 },
+  ]},
+  { level: 3, theme: "Advanced Inequalities", rooms: [
+    { id: "3A", kind: "enemy", name: "Troll", emoji: "🧌", power: 35 },
+    // Dark Knight power is 5x with x = 9  ->  45
+    { id: "3B", kind: "enemy", name: "Dark Knight", emoji: "🛡️",
+      expr: { a: 5, b: 0, x: 9, text: "5x", choices: [14, 45, 54] } },
+  ]},
+];
+const ROOF = { id: "roof", kind: "boss", name: "Dragon", emoji: "🐉", power: 75 };
+
+/* Gate between floor L and L+1. solve(H) returns the correct x for the
+   equation, given the hero power H captured when the gate is opened. */
+const GATES = {
+  1: { id: "gate1", kind: "1-step",
+       text: (H) => `<span class="h">${H}</span> + <span class="x">x</span> = 25`,
+       solve: (H) => 25 - H, newPower: 25,
+       blurb: "One-step equation — what must we add to reach 25?" },
+  2: { id: "gate2", kind: "2-step",
+       text: (H) => `2<span class="x">x</span> − 5 = <span class="h">${H}</span>`,
+       solve: (H) => (H + 5) / 2, newPower: 60,
+       blurb: "Two-step equation — undo the −5, then the ×2." },
+};
+
+/* --------------------------------------------------------------- STATE --- */
+const initialState = () => ({
+  heroPower: 10,
+  currentFloor: 1,        // 1..3 = floors, 4 = roof reachable
+  cleared: {},            // roomId -> true
+  gatesSolved: {},        // gateLevel -> true
+  status: "playing",      // playing | gameover | victory
+  pending: null,          // active interaction context
+  log: [],
+});
+let S = initialState();
+
+/* ---------------------------------------------------------------- DOM ---- */
+const el = (id) => document.getElementById(id);
+const towerEl = el("tower"), interactionEl = el("interaction"), logEl = el("log");
+const hpEl = el("hpVal"), appEl = el("app");
+
+/* ------------------------------------------------------------- HELPERS --- */
+const evalExpr = (e) => e.a * e.x + e.b;                 // a·x + b
+const enemyPower = (room) => room.expr ? evalExpr(room.expr) : room.power;
+const shuffle = (arr) => arr.map(v => [Math.random(), v]).sort((a,b)=>a[0]-b[0]).map(p=>p[1]);
+function gateChoices(correct){
+  const set = new Set([correct]);
+  [correct+5, correct-5, correct+3, correct+8, correct-3].forEach(v => { if(v>0) set.add(v); });
+  return shuffle([...set].slice(0,3).sort(()=>Math.random()-0.5)).slice(0,3);
+}
+
+/* -------------------------------------------------------------- SOUND ---- */
+let audioCtx = null;
+function tone(freq, dur, type = "sine", vol = 0.18, when = 0){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t = audioCtx.currentTime + when;
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination); o.start(t); o.stop(t + dur);
+  }catch(_){ /* audio is a nice-to-have */ }
+}
+const sfx = {
+  chime: () => { tone(660,.12,"triangle"); tone(880,.18,"triangle",.16,.1); },
+  hit:   () => { tone(180,.16,"square",.2); },
+  buzz:  () => { tone(120,.3,"sawtooth",.18); },
+  win:   () => [523,659,784,1047].forEach((f,i)=>tone(f,.3,"triangle",.2,i*.14)),
+};
+
+/* --------------------------------------------------------- ACCESS RULES ---
+   Floors clear bottom-to-top. A room is playable only on the current floor.
+   When both rooms of a floor are cleared, its gate lights up; solving the gate
+   advances the hero. After floor 3 clears, the roof (Dragon) opens. */
+const floorCleared = (lvl) => FLOORS[lvl-1].rooms.every(r => S.cleared[r.id]);
+const roomAccessible = (lvl, room) =>
+  S.status === "playing" && lvl === S.currentFloor && !S.cleared[room.id];
+const gateActive = (lvl) =>
+  S.status === "playing" && lvl === S.currentFloor && lvl <= 2 &&
+  floorCleared(lvl) && !S.gatesSolved[lvl];
+const roofAccessible = () => S.status === "playing" && S.currentFloor === 4;
+
+/* ------------------------------------------------------------- RENDER ----- */
+function heroBadge(){
+  return `<div class="hero show"><div class="float">${S.heroPower}</div><div class="ava">🦸</div></div>`;
+}
+function roomHTML(lvl, room){
+  const cleared = !!S.cleared[room.id];
+  const access = roomAccessible(lvl, room);
+  const cls = ["room", room.kind, access ? "accessible" : "", cleared ? "cleared" : ""].join(" ");
+  let pwr;
+  if (cleared) pwr = `<span class="pwr">cleared</span>`;
+  else if (room.kind === "item") pwr = `<span class="pwr">+${room.add}</span>`;
+  else if (room.expr) pwr = `<span class="pwr">Power = ?</span>`;
+  else pwr = `<span class="pwr">Power ${room.power}</span>`;
+  return `<div class="${cls}" data-room="${room.id}">
+      <span class="emoji">${room.emoji}</span>
+      <span class="name">${room.name}</span>${pwr}
+    </div>`;
+}
+function floorHTML(floor){
+  const lvl = floor.level;
+  const active = (lvl === S.currentFloor && lvl <= 3) ? "active" : "";
+  return `<div class="floor ${active}">
+      <span class="ftag">FLOOR ${lvl} · ${floor.theme}</span>
+      ${roomHTML(lvl, floor.rooms[0])}
+      <div class="herozone">${lvl === S.currentFloor ? heroBadge() : ""}</div>
+      ${roomHTML(lvl, floor.rooms[1])}
+    </div>`;
+}
+function gateHTML(lvl){
+  const g = GATES[lvl];
+  const solved = !!S.gatesSolved[lvl];
+  const cls = ["gate", gateActive(lvl) ? "active" : "", solved ? "open" : ""].join(" ");
+  return `<div class="${cls}" data-gate="${lvl}">${solved ? "🔓" : "🔒"} GATE ${lvl} · ${g.kind} equation</div>`;
+}
+function renderTower(){
+  const roofCls = ["roof", roofAccessible() ? "accessible" : ""].join(" ");
+  towerEl.innerHTML =
+    `<div class="${roofCls}" data-roof="1">
+        <span class="emoji">${ROOF.emoji}</span>
+        <span class="name">${ROOF.name} (Boss)</span>
+        <span class="pwr">Power ${ROOF.power}</span>
+        ${S.currentFloor === 4 ? heroBadge() : ""}
+     </div>` +
+    floorHTML(FLOORS[2]) + gateHTML(2) +
+    floorHTML(FLOORS[1]) + gateHTML(1) +
+    floorHTML(FLOORS[0]);
+}
+function renderHero(pop){
+  hpEl.textContent = S.heroPower;
+  if (pop){ hpEl.classList.remove("pop"); void hpEl.offsetWidth; hpEl.classList.add("pop"); }
+}
+function renderAll(pop){ renderHero(pop); renderTower(); }
+
+/* ------------------------------------------------------ MATH LEDGER LOG --- */
+function showInteraction(html){ interactionEl.innerHTML = html; }
+function logAdd(html, cls){
+  const li = document.createElement("li");
+  if (cls) li.className = cls;
+  li.innerHTML = html;
+  logEl.prepend(li);                 // newest entry on top
+  S.log.push(html);
+}
+const fmtExpr = (e) => `${e.a}(${e.x})${e.b ? ` + ${e.b}` : ""}`;  // e.g. 2(5) + 3
+
+/* ----------------------------------------------------- INTERACTION VIEWS --- */
+function renderIdle(){
+  let obj;
+  if (S.currentFloor <= 3){
+    const f = FLOORS[S.currentFloor - 1];
+    const remaining = f.rooms.filter(r => !S.cleared[r.id]).length;
+    obj = remaining > 0
+      ? `Clear both rooms on <b>Floor ${S.currentFloor}</b> <span class="muted">(${f.theme})</span>.`
+      : `Floor ${S.currentFloor} cleared! Tap the glowing <b>Gate ${S.currentFloor}</b> to solve its equation.`;
+  } else {
+    obj = `Only the <b>Dragon</b> remains — tap the roof to face the boss!`;
+  }
+  showInteraction(`
+    <div class="kicker">Objective</div>
+    <div class="idle-hint">
+      <p>${obj}</p>
+      <p class="muted">Tap a glowing room to act. Beat an enemy when <b>H &gt; E</b>, and its
+      power is added to yours: <b>H = H + E</b>.</p>
+    </div>`);
+}
+
+/* Step 1 for mystery enemies: evaluate the expression to reveal true power. */
+function renderExpr(room){
+  const e = room.expr;
+  const choices = shuffle(e.choices.slice());
+  showInteraction(`
+    <div class="kicker enemy">Expression Evaluation</div>
+    <div class="prompt">A <b>${room.name}</b> ${room.emoji} guards this room. Its power is hidden:</div>
+    <div class="eqn">power = <span class="x">${e.text}</span></div>
+    <div class="tablet">📜 The stone tablet reads: &nbsp;<b>x = ${e.x}</b></div>
+    <div class="prompt" style="text-align:center">Evaluate to reveal the enemy's power:</div>
+    <div class="choices">${choices.map(c => `<button class="choice" data-val="${c}">${c}</button>`).join("")}</div>
+    <div class="warn" id="exprWarn" style="display:none"></div>`);
+  interactionEl.querySelectorAll(".choice").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const v = +btn.dataset.val, ans = evalExpr(e);
+      if (v === ans){
+        sfx.chime();
+        logAdd(`Evaluate ${room.name}: <b>${fmtExpr(e)} = ${ans}</b>`);
+        renderBattle(room, ans, true);
+      } else {
+        sfx.buzz();
+        const w = el("exprWarn"); w.style.display = "block";
+        w.textContent = `Not quite — work it out: ${e.a} × ${e.x}${e.b ? ` then + ${e.b}` : ""}.`;
+      }
+    });
+  });
+}
+
+/* Combat phase: the explicit inequality H > E the player must confirm. */
+function renderBattle(room, E, revealed){
+  const H = S.heroPower, boss = room.kind === "boss";
+  showInteraction(`
+    <div class="kicker enemy">${boss ? "Final Boss" : "Inequality Evaluation"}</div>
+    <div class="prompt">To defeat the <b>${room.name}</b> ${room.emoji}, prove the inequality is <b>True</b>:</div>
+    <div class="eqn">Hero <span class="h">H</span> &gt; Enemy <span class="e">E</span></div>
+    <div class="eqn"><span class="h">${H}</span> &gt; <span class="e">${E}</span> &nbsp;?</div>
+    ${revealed ? `<div class="tablet">Revealed power: ${room.name} = ${E}</div>` : ""}
+    <div class="actions">
+      <button class="btn danger" id="confirmBtn">Confirm Battle (True)</button>
+      <button class="btn ghost" id="retreatBtn">Retreat</button>
+    </div>
+    <div class="warn" id="battleWarn" style="display:none"></div>`);
+  el("confirmBtn").addEventListener("click", () => resolveBattle(room, E));
+  el("retreatBtn").addEventListener("click", () => { S.pending = null; renderIdle(); });
+}
+
+/* ----------------------------------------------------------- MUTATORS ---- */
+const stripTags = (h) => h.replace(/<[^>]+>/g, "");
+function setHeroPower(v){
+  S.heroPower = v;
+  renderHero(true);
+  if (v <= 0 && S.status === "playing") gameOver();
+}
+function shakeScreen(){ appEl.classList.add("shake"); setTimeout(() => appEl.classList.remove("shake"), 420); }
+function advanceAfterClear(){
+  // Floor 3 has no gate above it — clearing it opens the roof directly.
+  if (S.currentFloor === 3 && floorCleared(3)) S.currentFloor = 4;
+}
+
+/* Combat resolution: enforce H > E, then reassign heroPower = heroPower + E. */
+function resolveBattle(room, E){
+  const H = S.heroPower;
+  if (H > E){
+    sfx.hit();
+    const sel = room.kind === "boss" ? "[data-roof]" : `[data-room="${room.id}"]`;
+    const cell = towerEl.querySelector(sel);
+    if (cell) cell.classList.add("defeat");
+    logAdd(`${H} &gt; ${E} is True → New Hero Power = <b>${H + E}</b>`);
+    S.cleared[room.id] = true;
+    setHeroPower(H + E);          // heroPower = heroPower + enemyPower
+    S.pending = null;
+    setTimeout(() => {
+      if (room.kind === "boss") return victory();
+      advanceAfterClear(); renderAll(); renderIdle();
+    }, 480);
+  } else {
+    sfx.buzz();
+    const w = el("battleWarn");
+    if (w){ w.style.display = "block"; w.textContent = `Your value is too low to satisfy this inequality! (${H} > ${E} is False)`; }
+    logAdd(`${H} &gt; ${E} is False — attack blocked`, "bad");
+  }
+}
+
+/* Items: a chest adds a flat number to heroPower. */
+function renderItem(room){
+  const H = S.heroPower;
+  showInteraction(`
+    <div class="kicker gold">Treasure</div>
+    <div class="prompt">You found a <b>${room.name}</b> ${room.emoji}! Claiming it adds ${room.add} to your power.</div>
+    <div class="eqn"><span class="h">H</span> = ${H} + ${room.add}</div>
+    <div class="actions">
+      <button class="btn gold" id="openChest">Open Chest (+${room.add})</button>
+      <button class="btn ghost" id="leaveChest">Leave</button>
+    </div>`);
+  el("openChest").addEventListener("click", () => {
+    sfx.chime();
+    const cell = towerEl.querySelector(`[data-room="${room.id}"]`);
+    if (cell) cell.classList.add("defeat");
+    logAdd(`Chest: H = ${H} + ${room.add} = <b>${H + room.add}</b>`, "gate");
+    S.cleared[room.id] = true;
+    setHeroPower(H + room.add);
+    S.pending = null;
+    setTimeout(() => { advanceAfterClear(); renderAll(); renderIdle(); }, 460);
+  });
+  el("leaveChest").addEventListener("click", () => { S.pending = null; renderIdle(); });
+}
+
+/* Gates: solve an equation for x via multiple choice. */
+function renderGate(lvl){
+  const g = GATES[lvl], H = S.heroPower, correct = g.solve(H);
+  const choices = gateChoices(correct);
+  S.pending = { type: "gate", lvl, H, correct };
+  showInteraction(`
+    <div class="kicker gold">${g.kind} Equation — Gate ${lvl}</div>
+    <div class="prompt">A locked gate seals the stairs. Solve for <span class="x">x</span> to forge the key.</div>
+    <div class="eqn">${g.text(H)}</div>
+    <div class="tablet">${g.blurb}</div>
+    <div class="prompt" style="text-align:center">Choose the value of <span class="x">x</span>:</div>
+    <div class="choices">${choices.map(c => `<button class="choice gold" data-val="${c}">x = ${c}</button>`).join("")}</div>
+    <div class="warn" id="gateWarn" style="display:none"></div>`);
+  interactionEl.querySelectorAll(".choice").forEach(btn =>
+    btn.addEventListener("click", () => answerGate(lvl, +btn.dataset.val, H, correct, g)));
+}
+function answerGate(lvl, val, H, correct, g){
+  if (val === correct){
+    sfx.chime();
+    S.gatesSolved[lvl] = true;
+    S.currentFloor = lvl + 1;
+    logAdd(`Gate ${lvl}: ${stripTags(g.text(H))} → x = <b>${correct}</b>. Hero Power → <b>${g.newPower}</b>`, "gate");
+    setHeroPower(g.newPower);
+    S.pending = null;
+    renderAll(); renderIdle();
+  } else {
+    sfx.buzz(); shakeScreen();
+    logAdd(`Gate ${lvl}: tried x = ${val} ✗ (−2 power)`, "bad");
+    setHeroPower(S.heroPower - 2);
+    const w = el("gateWarn");
+    if (w && S.status === "playing"){ w.style.display = "block"; w.textContent = `x = ${val} does not balance the equation. −2 power!`; }
+  }
+}
+
+/* ------------------------------------------------------------- INPUT ----- */
+function clickRoom(id){
+  if (S.status !== "playing") return;
+  let hit = null;
+  FLOORS.forEach(f => f.rooms.forEach(r => { if (r.id === id) hit = { lvl: f.level, room: r }; }));
+  if (!hit || !roomAccessible(hit.lvl, hit.room)) { sfx.buzz(); return; }
+  const room = hit.room;
+  if (room.kind === "item") renderItem(room);
+  else if (room.expr) renderExpr(room);
+  else renderBattle(room, room.power, false);
+}
+function clickGate(lvl){ if (gateActive(lvl)) renderGate(lvl); else sfx.buzz(); }
+function clickRoof(){ if (roofAccessible()) renderBattle(ROOF, ROOF.power, false); else sfx.buzz(); }
+
+/* --------------------------------------------------------- WIN / LOSE ---- */
+function showOverlay(kind, title, text, btn){
+  el("overlayCard").className = "card " + kind;
+  el("overlayTitle").textContent = title;
+  el("overlayText").innerHTML = text;
+  el("overlayBtn").textContent = btn;
+  el("overlay").classList.add("show");
+}
+function gameOver(){
+  S.status = "gameover";
+  S.pending = null;
+  showOverlay("lose", "💀 Game Over",
+    `Your hero's power fell to <b>${S.heroPower}</b>. The tower stands unconquered — regroup and try again!`,
+    "Try Again");
+}
+function victory(){
+  S.status = "victory";
+  logAdd("Dragon defeated — Tower conquered! 🏆", "win");
+  sfx.win(); startConfetti();
+  showOverlay("win", "🏆 Tower Conquered!",
+    `You mastered <b>variables, expressions, equations, and inequalities</b> — and slayed the Dragon with a final power of <b>${S.heroPower}</b>!`,
+    "Play Again");
+  // Report the final score to the host app (when embedded in the learning app).
+  postParent({ type: "atb:victory", power: S.heroPower });
+}
+function reset(){
+  stopConfetti();
+  S = initialState();
+  el("overlay").classList.remove("show");
+  logEl.innerHTML = "";
+  renderAll(); renderIdle();
+  postParent({ type: "atb:reset" });
+}
+
+/* ----------------------------------------------------- HOST BRIDGE ------
+   When this file is embedded in the learning app (inside a frame), report
+   the rendered height (so the host can size the frame) and the final score
+   on victory. Harmless when opened standalone (no parent listener). */
+function postParent(msg){
+  try { if (window.parent && window.parent !== window) window.parent.postMessage(msg, "*"); }
+  catch(_) {}
+}
+function postHeight(){
+  postParent({ type: "atb:height", height: Math.ceil(document.documentElement.scrollHeight) });
+}
+
+/* --------------------------------------------------------- CONFETTI ------ */
+const cv = el("confetti"), cx = cv.getContext("2d");
+let confettiId = null, parts = [];
+const COLORS = ["#38bdf8", "#fbbf24", "#34d399", "#fb5b6b", "#a78bfa"];
+function resizeC(){ cv.width = window.innerWidth; cv.height = window.innerHeight; }
+function startConfetti(){
+  cv.style.display = "block"; resizeC();
+  parts = Array.from({ length: 170 }, () => ({
+    x: Math.random()*cv.width, y: -20 - Math.random()*cv.height,
+    r: 4 + Math.random()*7, c: COLORS[(Math.random()*COLORS.length)|0],
+    vy: 2 + Math.random()*4, vx: -2 + Math.random()*4,
+    rot: Math.random()*6, vr: -0.2 + Math.random()*0.4,
+  }));
+  const t0 = performance.now();
+  cancelAnimationFrame(confettiId);
+  (function loop(now){
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (const p of parts){
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot);
+      cx.fillStyle = p.c; cx.fillRect(-p.r/2, -p.r/2, p.r, p.r*0.6); cx.restore();
+      if (p.y > cv.height + 20){ p.y = -20; p.x = Math.random()*cv.width; }
+    }
+    if (now - t0 < 4800) confettiId = requestAnimationFrame(loop);
+    else stopConfetti();
+  })(t0);
+}
+function stopConfetti(){
+  cancelAnimationFrame(confettiId);
+  if (cx) cx.clearRect(0, 0, cv.width, cv.height);
+  cv.style.display = "none";
+}
+
+/* ----------------------------------------------------------- WIRING ------ */
+towerEl.addEventListener("click", (e) => {
+  const room = e.target.closest("[data-room]"); if (room) return clickRoom(room.dataset.room);
+  const gate = e.target.closest("[data-gate]"); if (gate) return clickGate(+gate.dataset.gate);
+  const roof = e.target.closest("[data-roof]"); if (roof) return clickRoof();
+});
+el("resetBtn").addEventListener("click", reset);
+el("overlayBtn").addEventListener("click", reset);
+window.addEventListener("resize", () => { if (cv.style.display === "block") resizeC(); });
+
+/* ------------------------------------------------------------- BOOT ------ */
+renderAll();
+renderIdle();
+// Keep the host frame sized to the content as the tower/ledger change.
+try { new ResizeObserver(() => postHeight()).observe(document.body); }
+catch(_) { window.addEventListener("resize", postHeight); }
+postHeight();
+</script>
+</body>
+</html>

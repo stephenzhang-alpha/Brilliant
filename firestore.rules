@@ -1,9 +1,68 @@
 rules_version = '2';
 
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: userProgress
+// Document ID: {userId} (the owner's auth uid)
+//   - Arbitrary per-user learning progress, readable/writable only by its owner.
+//
+// Collection: dinoScores   (Dino Runner global leaderboard)
+// Document ID: {userId} (the owner's auth uid — one best-score row per player)
+// Fields:
+//   - uid: string (required, immutable, == document id) - owner uid
+//   - name: string (required, 1..20 chars) - public display handle (NOT an email)
+//   - score: number (required, 0..100000000) - the player's best score
+//   - updatedAt: timestamp (required) - when the best score was last written
+//
+// Reads of dinoScores require authentication (the leaderboard is shown to
+// signed-in players only), so no email or other PII is ever exposed publicly.
+// ===============================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /userProgress/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    // ----------------------- Helper functions -----------------------
+    function isAuthenticated() {
+      return request.auth != null;
     }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Strict validator for a leaderboard row. Used on BOTH create and update.
+    function isValidScore(data, userId) {
+      return data.keys().hasOnly(['uid', 'name', 'score', 'updatedAt']) &&
+        data.keys().hasAll(['uid', 'name', 'score', 'updatedAt']) &&
+        data.uid is string && data.uid == userId &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 20 &&
+        data.score is number && data.score >= 0 && data.score <= 100000000 &&
+        data.updatedAt is timestamp;
+    }
+
+    // ----------------------- userProgress ----------------------------
+    match /userProgress/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // ----------------------- dinoScores (leaderboard) ----------------
+    match /dinoScores/{userId} {
+      // Signed-in players can read the leaderboard.
+      allow read: if isAuthenticated();
+
+      // A player may only create their own row, fully validated.
+      allow create: if isOwner(userId) && isValidScore(request.resource.data, userId);
+
+      // Updates must stay valid and may never change the owning uid.
+      allow update: if isOwner(userId) &&
+        isValidScore(request.resource.data, userId) &&
+        request.resource.data.uid == resource.data.uid;
+
+      // Scores are permanent on the leaderboard.
+      allow delete: if false;
+    }
+
+    // Default deny: anything not matched above is rejected.
   }
 }

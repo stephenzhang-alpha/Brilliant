@@ -1,4 +1,5 @@
 import variablesAndExpressions from './lessons/variables-and-expressions';
+import equationLab from './lessons/equation-lab';
 import oneStepEquations from './lessons/one-step-equations';
 import balancingEquations from './lessons/balancing-equations';
 import twoStepEquations from './lessons/two-step-equations';
@@ -20,6 +21,7 @@ export const lessons: Lesson[] = [
   balancingEquations,
   twoStepEquations,
   inequalities,
+  equationLab,
   // Patterns strand
   patternRules,
   functionMachines,

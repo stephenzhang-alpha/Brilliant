@@ -97,6 +97,54 @@ const lesson: Lesson = {
       },
     },
     {
+      id: 'twostep-drag-3',
+      type: 'problem',
+      interactionType: 'TERM_DRAG',
+      prompt: 'Solve: 2x + 6 = 14. Move the constant first, then solve for x.',
+      hints: [
+        'Step 1: Move +6 to get 2x = 14 - 6 = 8.',
+        'Step 2: Divide both sides by 2: x = 8 ÷ 2 = 4.',
+      ],
+      validationRule: { type: 'exact', answer: 4 },
+      remediation: {
+        wrong_answer: 'Step 1: 2x + 6 = 14 → 2x = 8. Step 2: x = 8 ÷ 2 = 4.',
+        sign_error: '+6 becomes -6 when it crosses the equals sign.',
+        off_by_one: 'Close — divide by the coefficient after isolating 2x.',
+        empty: 'Drag the constant term across to start.',
+      },
+      problemConfig: {
+        equation: {
+          left: [
+            { id: '2x', coefficient: 2, variable: 'x', isConstant: false },
+            { id: 'c1', coefficient: 6, isConstant: true },
+          ],
+          right: [{ id: 'c2', coefficient: 14, isConstant: true }],
+          targetVariable: 'x',
+          targetValue: 4,
+        },
+      },
+    },
+    {
+      id: 'twostep-input-2',
+      type: 'problem',
+      interactionType: 'NUMBER_INPUT',
+      prompt: 'Solve for x: 5x - 4 = 21. What is x?',
+      hints: [
+        'Add 4 to both sides: 5x = 25.',
+        'Divide both sides by 5: x = 5.',
+      ],
+      validationRule: { type: 'exact', answer: 5 },
+      remediation: {
+        wrong_answer: '5x - 4 = 21. Add 4: 5x = 25. Divide by 5: x = 5.',
+        off_by_one: 'Almost — recheck the division by 5.',
+        sign_error: 'Add 4 to both sides first; the result is positive.',
+        empty: 'Enter your answer.',
+      },
+      problemConfig: {
+        numberInput: { correctAnswer: 5, placeholder: 'x = ?' },
+      },
+    },
+    {
       id: 'twostep-synthesis',
       type: 'synthesis',
       prompt: 'Two-step master!',

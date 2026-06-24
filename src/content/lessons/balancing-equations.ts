@@ -84,6 +84,50 @@ const lesson: Lesson = {
       },
     },
     {
+      id: 'balance-4',
+      type: 'problem',
+      interactionType: 'BALANCE_SCALE',
+      prompt: 'Solve x + 2 = 6 on the scale. Keep it level as you remove weights.',
+      hints: [
+        'Drag the 2 off the left pan, then split the 6 to remove 2 from the right.',
+        'After removing 2 from both sides, x sits alone opposite 4.',
+      ],
+      validationRule: { type: 'exact', answer: 4 },
+      problemConfig: {
+        balance: {
+          variable: 'x',
+          left: [
+            { kind: 'var', value: 1 },
+            { kind: 'const', value: 2 },
+          ],
+          right: [{ kind: 'const', value: 6 }],
+          targetValue: 4,
+          goalText: 'Remove the +2 from both pans to leave x by itself.',
+        },
+      },
+    },
+    {
+      id: 'balance-5',
+      type: 'problem',
+      interactionType: 'BALANCE_SCALE',
+      prompt: 'The scale shows 3x = 12. Split BOTH sides into equal groups to find one x.',
+      hints: [
+        'Three x weights balance 12. Use the "÷ 3" tool to split both pans into three equal groups.',
+        'A third of 3x is x; a third of 12 is 4. So x = 4.',
+      ],
+      validationRule: { type: 'exact', answer: 4 },
+      problemConfig: {
+        balance: {
+          variable: 'x',
+          left: [{ kind: 'var', value: 3 }],
+          right: [{ kind: 'const', value: 12 }],
+          divisors: [3],
+          targetValue: 4,
+          goalText: 'Divide both sides into 3 equal groups so a single x is left.',
+        },
+      },
+    },
+    {
       id: 'balance-synthesis',
       type: 'synthesis',
       prompt: "You've mastered the balance!",

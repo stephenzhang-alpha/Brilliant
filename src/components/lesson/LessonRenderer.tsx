@@ -15,6 +15,9 @@ export function LessonRenderer({ lesson }: Props) {
   const { updateLessonProgress, completeLesson, recordActivity, saveProgress, getLessonProgress } = useProgressStore();
   const navigate = useNavigate();
 
+  // Signed-in users persist to their account; everyone else keeps local "guest" progress.
+  const progressId = user?.uid ?? 'guest';
+
   const existingProgress = getLessonProgress(lesson.id);
   const startStep = existingProgress?.completed ? 0 : (existingProgress?.currentStepIndex || 0);
 
@@ -27,8 +30,6 @@ export function LessonRenderer({ lesson }: Props) {
   const progressPercent = ((currentStepIndex) / totalSteps) * 100;
 
   const handleStepComplete = (correct: boolean) => {
-    if (!user) return;
-
     updateLessonProgress(lesson.id, currentStepIndex, correct);
     recordActivity();
 
@@ -36,11 +37,11 @@ export function LessonRenderer({ lesson }: Props) {
       setAttempts(0);
       if (currentStepIndex >= totalSteps - 1) {
         completeLesson(lesson.id, lesson.xpReward);
-        saveProgress(user.uid);
+        saveProgress(progressId);
         setShowCompletion(true);
       } else {
         setCurrentStepIndex((prev) => prev + 1);
-        saveProgress(user.uid);
+        saveProgress(progressId);
       }
     } else {
       setAttempts((prev) => prev + 1);
@@ -64,10 +65,10 @@ export function LessonRenderer({ lesson }: Props) {
             </button>
           )}
           <button
-            onClick={() => navigate('/course')}
+            onClick={() => navigate('/')}
             className="border border-white/20 hover:border-white/40 text-text-muted font-medium py-3 rounded-xl transition-colors"
           >
-            Back to Course
+            Back to Roadmap
           </button>
         </div>
       </div>

@@ -102,6 +102,52 @@ const lesson: Lesson = {
       },
     },
     {
+      id: 'var-build-3',
+      type: 'problem',
+      interactionType: 'EXPRESSION_BUILDER',
+      prompt: 'If n = 2, build the value of 3n.',
+      hints: ['3n means 3 groups of n.', 'Three groups of 2 is 6.'],
+      validationRule: { type: 'exact', answer: 6 },
+      remediation: {
+        wrong_answer: {
+          kind: 'microActivity',
+          activity: 'number-line-hop',
+          message: '3n means 3 times n. With n = 2, that is three hops of 2.',
+          params: { min: 0, max: 12, answer: 6, caption: 'Three groups of 2' },
+        },
+      },
+      problemConfig: {
+        expressionBuilder: {
+          expression: [{ id: 'n', coefficient: 3, variable: 'n', isConstant: false }],
+          variable: 'n',
+          substituteValue: 2,
+          answer: 6,
+          maxValue: 12,
+        },
+      },
+    },
+    {
+      id: 'var-eval-2',
+      type: 'problem',
+      interactionType: 'NUMBER_INPUT',
+      prompt: 'If x = 4, evaluate the expression: 5x - 3',
+      hints: ['First multiply: 5 × 4 = 20', 'Then subtract: 20 - 3 = ?'],
+      validationRule: { type: 'exact', answer: 17 },
+      remediation: {
+        wrong_answer: { kind: 'text', message: 'Order of operations: multiply 5 × x first, then subtract 3.' },
+        off_by_one: {
+          kind: 'microActivity',
+          activity: 'number-line-hop',
+          message: 'Very close — start at 20 (which is 5 × 4) and step back 3.',
+          params: { min: 12, max: 22, answer: 17, caption: '20 minus 3' },
+        },
+        empty: { kind: 'text', message: 'Type a number to answer.' },
+      },
+      problemConfig: {
+        numberInput: { correctAnswer: 17, placeholder: 'Enter your answer' },
+      },
+    },
+    {
       id: 'var-synthesis',
       type: 'synthesis',
       prompt: 'Great work!',

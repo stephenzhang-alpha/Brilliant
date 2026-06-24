@@ -70,6 +70,47 @@ const lesson: Lesson = {
       problemConfig: { numberInput: { correctAnswer: -3, placeholder: 'boundary' } },
     },
     {
+      id: 'ineq-3',
+      type: 'problem',
+      interactionType: 'NUMBER_INPUT',
+      prompt: 'Solve x - 5 > 2. The solution is x > ___. Enter the boundary value.',
+      hints: ['Add 5 to both sides.', '2 + 5 = 7, so x > 7.'],
+      validationRule: { type: 'exact', answer: 7 },
+      remediation: {
+        wrong_answer: { kind: 'text', message: 'Isolate x by adding 5 to both sides: x > 2 + 5.' },
+        off_by_one: {
+          kind: 'microActivity',
+          activity: 'number-line-hop',
+          message: 'Step forward 5 from 2 to find the boundary.',
+          params: { min: 0, max: 12, answer: 7, caption: '2 plus 5' },
+        },
+      },
+      problemConfig: { numberInput: { correctAnswer: 7, placeholder: 'boundary' } },
+    },
+    {
+      id: 'ineq-flip-2',
+      type: 'problem',
+      interactionType: 'NUMBER_INPUT',
+      prompt: 'Solve -2x < 8. Dividing by -2 flips the sign to x > ___. Enter the boundary.',
+      hints: ['Divide both sides by -2 and FLIP the sign.', '8 ÷ -2 = -4, so x > -4.'],
+      validationRule: { type: 'exact', answer: -4 },
+      remediation: {
+        wrong_answer: {
+          kind: 'visual',
+          visual: 'sign-flip',
+          message: 'Dividing by a negative flips the inequality. 8 ÷ -2 = -4, so x > -4.',
+          params: { value: 8 },
+        },
+        sign_error: {
+          kind: 'visual',
+          visual: 'sign-flip',
+          message: 'The boundary is -4, and the sign flips from < to >.',
+          params: { value: 8 },
+        },
+      },
+      problemConfig: { numberInput: { correctAnswer: -4, placeholder: 'boundary' } },
+    },
+    {
       id: 'ineq-synthesis',
       type: 'synthesis',
       prompt: 'Inequalities mastered!',

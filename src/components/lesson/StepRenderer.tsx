@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { LessonStep, Remediation } from '../../types';
 import { NumberInput } from '../interactions/NumberInput';
 import { TermDrag } from '../interactions/TermDrag';
+import { EquationLab } from '../interactions/EquationLab';
 import { InteractiveBalance } from '../interactions/InteractiveBalance/InteractiveBalance';
 import { GraphPlot } from '../interactions/GraphPlot';
 import { ExpressionBuilder } from '../interactions/ExpressionBuilder';
@@ -112,6 +113,10 @@ export function StepRenderer({ step, onComplete }: Props) {
 
       {step.interactionType === 'TERM_DRAG' && step.problemConfig?.equation && (
         <TermDrag config={step.problemConfig.equation} onSubmit={handleSubmit} disabled={answered} />
+      )}
+
+      {step.interactionType === 'EQUATION_LAB' && step.problemConfig?.equation && (
+        <EquationLab config={step.problemConfig.equation} onSubmit={handleSubmit} disabled={answered} />
       )}
 
       {step.interactionType === 'BALANCE_SCALE' && step.problemConfig?.balance && (
