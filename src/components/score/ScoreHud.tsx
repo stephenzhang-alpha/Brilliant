@@ -48,10 +48,12 @@ function useCountUp(target: number, duration = 650): number {
 }
 
 /**
- * The compact, animated score pill: rank badge + count-up total + a slim
- * progress bar toward the next rank, with a "+N" float-up on each gain and a
- * glow flourish while a promotion is being celebrated. Purely presentational —
- * wrap it in a button (HUD) or a Link (nav) for interaction.
+ * The compact, animated score pill: rank badge + count-up total (the sum of the
+ * player's best runs) + a slim progress bar toward the next rank. A new personal
+ * best floats a green "+N · new best!" up; a run that doesn't beat your record
+ * floats a subtle "no new best" instead. A glow flourish plays while a promotion
+ * is being celebrated. Purely presentational — wrap it in a button (HUD) or a
+ * Link (nav) for interaction.
  */
 export function ScoreChip({ className = '' }: { className?: string }) {
   const overall = useOverallStore((s) => s.overall);
@@ -60,20 +62,25 @@ export function ScoreChip({ className = '' }: { className?: string }) {
   const display = useCountUp(overall);
   const info = rankInfo(overall);
 
+  const gainAt = lastGain?.at ?? 'init';
+  const gainPoints = lastGain?.points ?? 0;
+  const newBest = !!lastGain && lastGain.isBest && gainPoints > 0;
+  const noBest = !!lastGain && !lastGain.isBest;
+
   return (
     <div
       className={`relative flex flex-col gap-1 rounded-2xl bg-amber-400 px-2.5 py-1 text-amber-950 shadow sm:px-3 ${
         justRankedUp !== null ? 'animate-glow' : ''
       } ${className}`}
       style={{ '--rank': info.rank.color } as CSSProperties}
-      title={`${info.rank.name} — ${overall.toLocaleString()} pts`}
+      title={`${info.rank.name} — ${overall.toLocaleString()} pts (sum of your best scores)`}
     >
       <span className="flex items-center gap-1.5 font-display font-bold leading-none tabular-nums">
         <span aria-hidden className="text-sm leading-none">
           {info.rank.icon}
         </span>
         <span aria-hidden>⭐</span>
-        <span key={lastGain?.at ?? 'init'} className={lastGain ? 'animate-pop' : ''}>
+        <span key={gainAt} className={newBest ? 'animate-pop' : ''}>
           {display.toLocaleString()}
         </span>
       </span>
@@ -83,12 +90,25 @@ export function ScoreChip({ className = '' }: { className?: string }) {
           style={{ width: `${info.progress * 100}%`, background: info.rank.color }}
         />
       </span>
-      {lastGain && (
+      {newBest && (
         <span
-          key={`gain-${lastGain.at}`}
-          className="animate-floatup pointer-events-none absolute -top-3 right-2 font-display text-sm font-bold text-success"
+          key={`gain-${gainAt}`}
+          className="animate-floatup pointer-events-none absolute -top-4 right-1 flex flex-col items-end leading-none"
         >
-          +{lastGain.points.toLocaleString()}
+          <span className="font-display text-sm font-bold text-success">
+            +{gainPoints.toLocaleString()}
+          </span>
+          <span className="font-display text-[0.6rem] font-bold uppercase tracking-wide text-success/90">
+            new best!
+          </span>
+        </span>
+      )}
+      {noBest && (
+        <span
+          key={`nobest-${gainAt}`}
+          className="animate-floatup pointer-events-none absolute -top-3 right-1 font-display text-[0.65rem] font-semibold text-amber-950/55"
+        >
+          no new best
         </span>
       )}
     </div>
@@ -97,14 +117,16 @@ export function ScoreChip({ className = '' }: { className?: string }) {
 
 /**
  * The interactive score HUD for the journey bar: the chip plus an expandable
- * panel showing rank progress, a per-game contribution breakdown, the session
- * tally, and a guarded "reset progress" control.
+ * panel showing rank progress, a per-game *best* breakdown (the overall is the
+ * sum of these three bests), the session tally, and a guarded "reset progress"
+ * control.
  */
 export function ScoreHud() {
   const [open, setOpen] = useState(false);
   const overall = useOverallStore((s) => s.overall);
   const contributions = useOverallStore((s) => s.contributions);
   const sessionGain = useOverallStore((s) => s.sessionGain);
+  const lastGain = useOverallStore((s) => s.lastGain);
   const reset = useOverallStore((s) => s.reset);
   const info = rankInfo(overall);
 
@@ -143,6 +165,9 @@ export function ScoreHud() {
     contributions.tower,
   );
   const games: ScoreSource[] = ['dino', 'gates', 'tower'];
+  // The game whose record just fell (for a one-shot "new best!" badge), if any.
+  const justBeatSource = lastGain?.isBest ? lastGain.source : null;
+  const justBeatAt = lastGain?.at ?? 0;
 
   return (
     <div className="relative" data-scorehud>
@@ -184,9 +209,14 @@ export function ScoreHud() {
                 {info.rank.name}
               </p>
             </div>
-            <span className="ml-auto font-display text-xl font-extrabold tabular-nums">
-              {overall.toLocaleString()}
-            </span>
+            <div className="ml-auto text-right">
+              <span className="block font-display text-xl font-extrabold leading-none tabular-nums">
+                {overall.toLocaleString()}
+              </span>
+              <span className="block text-[0.55rem] font-bold uppercase tracking-wider text-text-muted">
+                sum of bests
+              </span>
+            </div>
           </div>
 
           <div className="mt-3">
@@ -225,13 +255,14 @@ export function ScoreHud() {
 
           <div className="mt-4">
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-text-muted">
-              Points by game
+              Your best per game
             </p>
             <div className="mt-2 space-y-2">
               {games.map((g) => {
                 const meta = GAME_META[g];
                 const val = contributions[g];
                 const pct = (val / maxContribution) * 100;
+                const justBeat = justBeatSource === g;
                 return (
                   <div key={g} className="flex items-center gap-2">
                     <span aria-hidden className="w-5 text-center">
@@ -239,12 +270,27 @@ export function ScoreHud() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm font-medium">{meta.label}</span>
-                        <span
-                          className="shrink-0 text-sm font-bold tabular-nums"
-                          style={{ color: meta.color }}
-                        >
-                          {val.toLocaleString()}
+                        <span className="flex min-w-0 items-baseline gap-1.5">
+                          <span className="truncate text-sm font-medium">{meta.label}</span>
+                          {justBeat && (
+                            <span
+                              key={`best-${g}-${justBeatAt}`}
+                              className="animate-pop shrink-0 rounded-full bg-success/15 px-1.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-wide text-success"
+                            >
+                              new best!
+                            </span>
+                          )}
+                        </span>
+                        <span className="flex shrink-0 items-baseline gap-1">
+                          <span className="text-[0.55rem] font-semibold uppercase tracking-wide text-text-muted">
+                            best
+                          </span>
+                          <span
+                            className="text-sm font-bold tabular-nums"
+                            style={{ color: meta.color }}
+                          >
+                            {val.toLocaleString()}
+                          </span>
                         </span>
                       </div>
                       <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-light">
@@ -258,6 +304,11 @@ export function ScoreHud() {
                 );
               })}
             </div>
+            <p className="mt-2 text-[0.7rem] leading-snug text-text-muted">
+              Your overall is the{' '}
+              <span className="font-semibold text-text">sum of your three best scores</span>. Beat a
+              game&apos;s record to raise it!
+            </p>
           </div>
 
           <div className="mt-4 flex items-center justify-between border-t border-black/10 pt-3">

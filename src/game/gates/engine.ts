@@ -5,21 +5,26 @@
 // of mobile-game ads: a road recedes toward a horizon, gates grow as they rush
 // toward you, and your crowd runs at the bottom of the screen.
 //
-// Algebra theming (Stage 2 — Expressions). YOU ARE AN EXPRESSION in x:
-//   • You begin as the variable x (coefficient 1) — a crowd of "x" runners.
-//   • OPERATION gates add or subtract MULTIPLES OF x ("+2x", "−x", …). Passing
-//     one COMBINES LIKE TERMS into your running coefficient (3x then "+2x" → 5x),
-//     and a floating cue shows the combination ("3x + 2x = 5x") so players watch
-//     like terms combine on their own expression. Subtract gates are the bad
-//     lane to avoid; the coefficient is clamped so it never drops below 0.
-//   • The LAST gate before the boss is the variable ASSIGNMENT: it gives x a
-//     single-digit value (x = 6 / x = 8). Crossing it EVALUATES your expression
-//     in an emphasized beat ("5x → 5×7 = 35") and your value becomes that number.
-//   • A FINAL BOSS subtracts its power from your numeric value; the survivors are
-//     your score.
+// Algebra theming (Stage 2 — Expressions). YOU ARE AN EXPRESSION of the form
+// ax + b, and you BUILD it as you run:
+//   • You begin as the variable x (coefficient a = 1, constant b = 0) — a crowd
+//     of "x" runners.
+//   • COEFFICIENT gates add or subtract a MULTIPLE OF x ("+2x", "−x", …) and
+//     COMBINE LIKE TERMS into a (3x then "+2x" → 5x). They are green (add) or a
+//     coral monster (subtract — avoid).
+//   • CONSTANT gates add or subtract a plain NUMBER ("+5", "−3") and combine
+//     into b (constants are like terms too). They are cyan (add) or an amber
+//     monster (subtract). Both gate families are mixed across the rows, so you
+//     reach the end having built a real ax + b (shown as "3x + 5", "2x − 4", …).
+//   • The LAST gate is the variable ASSIGNMENT (x = 6 / x = 8). Just before it a
+//     pop-up TEACHES how to evaluate (substitute, multiply a×x first, then add
+//     b) using your own a and b. After you pick x, YOU evaluate ax + b yourself
+//     in a quick multiple-choice beat — right celebrates, wrong shows the steps.
+//   • A FINAL BOSS subtracts its power from your evaluated value; the survivors
+//     are your score.
 //
-// Pedagogy: variable → combining like terms (building the expression) →
-// evaluating it once x is assigned.
+// Pedagogy: variable → combining like terms (coefficients AND constants, building
+// ax + b) → learning to evaluate → evaluating it yourself once x is assigned.
 //
 // Juice: pooled particle bursts on every gate, a crowd "pop" on growth, a combo
 // streak for consecutive good picks, speed lines that intensify with the combo,
@@ -27,20 +32,29 @@
 // leans/pans with your steering. All integration is in units-per-second so it is
 // frame-rate independent, and the hot draw loops avoid per-frame allocations.
 //
-// Scoring is tuned (Monte-Carlo verified) so a strong run lands in the low
-// hundreds (coefficient × single digit, minus boss) and breaking 1000 is
-// effectively impossible. The React layer runs the rAF loop, calls update(dt) +
-// draw(ctx), forwards input, and reads status/count.
+// Scoring is tuned so a strong run lands in the low hundreds (a·x + b, minus the
+// boss) and breaking 1000 is effectively impossible. The React layer runs the
+// rAF loop, calls update(dt) + draw(ctx), forwards input, reads status/phase/
+// count, and renders the teach + evaluate pop-ups as overlays.
 // ---------------------------------------------------------------------------
 
 export type GateStatus = 'ready' | 'running' | 'complete';
-// 'addx'/'subx' add or subtract a multiple of x (combine like terms);
+// Sub-phase within a 'running' game, read by the React layer to drive overlays:
+//   'run'   → normal steering;
+//   'teach' → frozen at the assignment gate while the "how to evaluate" pop-up
+//             is shown; resumed via continueFromTeach();
+//   'eval'  → frozen just after the assignment gate while the player evaluates
+//             their own expression; resumed via continueFromEval().
+export type RunPhase = 'run' | 'teach' | 'eval';
+// 'addx'/'subx' add or subtract a MULTIPLE OF x (changes the coefficient a);
+// 'addc'/'subc' add or subtract a plain CONSTANT (changes the constant b);
 // 'assign' gives the variable x a concrete single-digit value (last gate).
-export type ChoiceKind = 'assign' | 'addx' | 'subx';
+export type ChoiceKind = 'assign' | 'addx' | 'subx' | 'addc' | 'subc';
 
 interface Choice {
   kind: ChoiceKind;
-  // addx/subx → the multiple of x (1..4); assign → the digit value (1..9).
+  // addx/subx → the multiple of x (1..3); addc/subc → the constant (1..6);
+  // assign → the digit value (4..9).
   val: number;
   color: string;
   label: string;
@@ -65,10 +79,12 @@ const CAM_D = 0.72; // camera distance — controls how fast things shrink
 const Z_START = 3.6; // distance of the first gate at the start
 const ROW_GAP_Z = 1.5; // z-distance between gate rows
 const SPEED_Z = 1.18; // z-units travelled per second
-const OP_ROWS = 9; // combine-like-terms operation rows (then the assignment gate)
+const OP_ROWS = 10; // operation rows, mixing coefficient (±kx) and constant (±n) gates
 const NUM_ROWS = OP_ROWS + 1; // total gate rows: ops + the final assignment gate
-const ASSIGN_Z = Z_START + OP_ROWS * ROW_GAP_Z; // the assignment gate sits last
+const ASSIGN_GAP_Z = 2.8; // extra gap before the assignment gate (room for the teach beat + steering)
+const ASSIGN_Z = Z_START + (OP_ROWS - 1) * ROW_GAP_Z + ASSIGN_GAP_Z; // the assignment gate sits last
 const BOSS_GAP_Z = 2.4; // gap after assignment — lets the EVALUATE beat land first
+const TEACH_TRIGGER_Z = 2.4; // < ASSIGN_GAP_Z, so every op gate is resolved before the teach pop-up
 const KEY_LANE_SPEED = 2.6; // lane units per second from keyboard
 const DOT_CAP = 80;
 const GATE_NEAR_H = 100; // gate panel height at the near plane (s = 1)
@@ -78,10 +94,11 @@ const BOSS_CLASH_T = 0.62; // seconds the clash plays before the finish card
 
 // Palette — the shared Algebra Quest design language.
 const C = {
-  assign: '#7c3aed', // violet — the variable / assignment gate
-  add: '#22c55e', // green — add-a-multiple-of-x gate (good lane)
-  accent: '#06b6d4', // cyan — evaluation beat accent
-  enemy: '#fb5b6b', // coral — subtract-a-multiple-of-x gate (avoid)
+  assign: '#7c3aed', // violet — the variable / assignment gate + evaluate beat
+  add: '#22c55e', // green — add-a-multiple-of-x gate (coefficient, good lane)
+  addc: '#06b6d4', // cyan — add-a-constant gate (constant term, good lane)
+  enemy: '#fb5b6b', // coral — subtract-a-multiple-of-x monster (avoid)
+  subc: '#f59e0b', // amber — subtract-a-constant monster (avoid)
   boss: '#b91c1c', // deep red boss
   combo: '#f59e0b', // amber
   combo2: '#ec4899', // pink (hot streak)
@@ -108,6 +125,16 @@ function termX(n: number): string {
   return n === 0 ? '0' : n === 1 ? 'x' : `${n}x`;
 }
 
+// The full expression ax + b, formatted like a textbook: a = 1 hides the
+// coefficient ("x"), b = 0 hides the constant ("3x"), and a negative constant
+// reads with a minus ("2x − 4"). a = 0 collapses to just the constant.
+function fmtExpr(a: number, b: number): string {
+  if (a === 0) return b === 0 ? '0' : b > 0 ? `${b}` : `−${Math.abs(b)}`;
+  const ax = a === 1 ? 'x' : `${a}x`;
+  if (b === 0) return ax;
+  return b > 0 ? `${ax} + ${b}` : `${ax} − ${Math.abs(b)}`;
+}
+
 function assignChoice(val: number): Choice {
   return { kind: 'assign', val, color: C.assign, label: `x = ${val}` };
 }
@@ -117,11 +144,22 @@ function addxChoice(val: number): Choice {
 function subxChoice(val: number): Choice {
   return { kind: 'subx', val, color: C.enemy, label: `−${termX(val)}` };
 }
+function addcChoice(val: number): Choice {
+  return { kind: 'addc', val, color: C.addc, label: `+${val}` };
+}
+function subcChoice(val: number): Choice {
+  return { kind: 'subc', val, color: C.subc, label: `−${val}` };
+}
 
-// Combine an operation gate into the current coefficient (like terms). The
-// coefficient is clamped at 0 so a subtract gate can never take you negative.
+// Combine a coefficient gate into the current coefficient a (like terms). a is
+// clamped at 0 so a subtract gate can never take you negative.
 function combineCoef(coef: number, ch: Choice): number {
   return ch.kind === 'subx' ? Math.max(0, coef - ch.val) : coef + ch.val;
+}
+// Combine a constant gate into the running constant b. Constants combine with
+// constants — the same like-terms lesson — and b may dip below zero ("2x − 4").
+function combineConst(b: number, ch: Choice): number {
+  return ch.kind === 'subc' ? b - ch.val : b + ch.val;
 }
 
 interface Dot {
@@ -159,10 +197,20 @@ interface Cue {
 
 export class GateRunner {
   status: GateStatus = 'ready';
-  count = 0; // current numeric value: 0 while still an expression, set on assignment
-  coef = 1; // coefficient of x while building the expression (you start as 1·x)
-  assigned = false;
+  phase: RunPhase = 'run'; // sub-phase within a running game (read by the UI)
+  count = 0; // current numeric value: 0 while still an expression, set on evaluation
+  coef = 1; // coefficient a of x while building ax + b (you start as 1·x)
+  constant = 0; // constant term b while building ax + b (you start with no constant)
+  assigned = false; // x has been given a value at the assignment gate
   assignedX = 0; // the single-digit value x is given at the assignment gate
+  evaluated = false; // the player has evaluated ax + b into a number
+  // The interactive "evaluate it yourself" challenge, built at the assignment gate.
+  evalAnswer = 0; // the correct value of a·x + b
+  evalOptions: number[] = []; // multiple-choice answers (shuffled, includes the answer)
+  evalAnswered = false; // the player has submitted an answer
+  evalCorrect = false; // whether that submitted answer was right
+  evalPicked: number | null = null; // the value the player chose
+  private taught = false; // the teach pop-up has fired (once per run)
   rowsCleared = 0;
   readonly totalRows = NUM_ROWS;
   bossPower = 0;
@@ -242,10 +290,19 @@ export class GateRunner {
 
   reset() {
     this.status = 'ready';
+    this.phase = 'run';
     this.count = 0;
     this.coef = 1;
+    this.constant = 0;
     this.assigned = false;
     this.assignedX = 0;
+    this.evaluated = false;
+    this.evalAnswer = 0;
+    this.evalOptions = [];
+    this.evalAnswered = false;
+    this.evalCorrect = false;
+    this.evalPicked = null;
+    this.taught = false;
     this.rowsCleared = 0;
     this.bossDefeated = false;
     this.combo = 0;
@@ -269,37 +326,35 @@ export class GateRunner {
     for (const cu of this.cues) cu.active = false;
     this.buildRows();
     this.bossZ = ASSIGN_Z + BOSS_GAP_Z;
-    // Tuned for the new scale: your value is coefficient × single digit (low
-    // hundreds at best), so the boss takes a modest, survivable bite.
-    this.bossPower = randInt(40, 80);
+    // Tuned for the new scale: your value is a·x + b (low hundreds at best), so
+    // the boss takes a modest, survivable bite.
+    this.bossPower = randInt(30, 65);
   }
 
-  // Generate the gate rows for a run. First come OP_ROWS "combine like terms"
-  // rows (add/subtract a small multiple of x), biased so the coefficient keeps
-  // growing — subtract gates are the worse lane to avoid. The variable
-  // ASSIGNMENT gate is placed LAST, immediately before the boss, offering two
-  // single-digit values to steer between. The magnitudes are small so a strong
-  // run lands in the low hundreds and 1000 stays effectively out of reach.
+  // Generate the gate rows for a run. Each operation row belongs to one of two
+  // families: COEFFICIENT rows change a (±kx) and CONSTANT rows change b (±n).
+  // Row 0 is a coefficient opener and row 1 a constant opener — both are two
+  // adds, so whatever lane you take you leave with a > 1 and b > 0 and are
+  // genuinely building an ax + b. The remaining rows are an even mix, shuffled,
+  // with ~40% "trap" rows pairing a good add against a subtract monster. The
+  // ASSIGNMENT gate is placed LAST, offering two single-digit values to steer
+  // between (bigger is better). Magnitudes are small so a strong run lands in
+  // the low hundreds and 1000 stays effectively out of reach.
   private buildRows() {
     this.rows = [];
+
+    const families: ('coef' | 'const')[] = ['coef', 'const'];
+    const rest: ('coef' | 'const')[] = [];
+    for (let i = 0; i < OP_ROWS - 2; i++) rest.push(i % 2 === 0 ? 'coef' : 'const');
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    families.push(...rest);
+
     for (let i = 0; i < OP_ROWS; i++) {
       const z = Z_START + i * ROW_GAP_Z;
-      let left: Choice;
-      let right: Choice;
-      // The opener is always a clean "pick the bigger add" so the mechanic reads
-      // immediately; after that ~40% of rows pair a good add against a subtract.
-      if (i > 0 && Math.random() < 0.4) {
-        // Trap row: a healthy "+kx" vs. a "−kx" you should dodge.
-        const good = addxChoice(randInt(2, 3));
-        const bad = subxChoice(randInt(1, 3));
-        [left, right] = Math.random() < 0.5 ? [good, bad] : [bad, good];
-      } else {
-        // Two adds of different size — read fast, steer into the bigger gain.
-        const small = randInt(1, 2);
-        const big = randInt(small + 1, 3);
-        [left, right] =
-          Math.random() < 0.5 ? [addxChoice(small), addxChoice(big)] : [addxChoice(big), addxChoice(small)];
-      }
+      const [left, right] = families[i] === 'const' ? this.buildConstRow(i) : this.buildCoefRow(i);
       this.rows.push({ z, left, right, applied: false });
     }
 
@@ -310,6 +365,32 @@ export class GateRunner {
     while (b === a) b = randInt(4, 9);
     const [aL, aR] = Math.random() < 0.5 ? [a, b] : [b, a];
     this.rows.push({ z: ASSIGN_Z, left: assignChoice(aL), right: assignChoice(aR), applied: false });
+  }
+
+  // A coefficient row (±kx). The opener (i <= 1) is always two adds; later rows
+  // are ~40% trap (a healthy "+kx" vs. a "−kx" monster to dodge).
+  private buildCoefRow(i: number): [Choice, Choice] {
+    if (i > 1 && Math.random() < 0.4) {
+      const good = addxChoice(randInt(2, 3));
+      const bad = subxChoice(randInt(1, 3));
+      return Math.random() < 0.5 ? [good, bad] : [bad, good];
+    }
+    const small = randInt(1, 2);
+    const big = randInt(small + 1, 3);
+    return Math.random() < 0.5 ? [addxChoice(small), addxChoice(big)] : [addxChoice(big), addxChoice(small)];
+  }
+
+  // A constant row (±n). Mirrors the coefficient row but folds into b, using
+  // slightly bigger numbers so the constant term reads clearly in the bubble.
+  private buildConstRow(i: number): [Choice, Choice] {
+    if (i > 1 && Math.random() < 0.4) {
+      const good = addcChoice(randInt(3, 5));
+      const bad = subcChoice(randInt(1, 3));
+      return Math.random() < 0.5 ? [good, bad] : [bad, good];
+    }
+    const small = randInt(2, 3);
+    const big = randInt(small + 1, 6);
+    return Math.random() < 0.5 ? [addcChoice(small), addcChoice(big)] : [addcChoice(big), addcChoice(small)];
   }
 
   start() {
@@ -423,6 +504,9 @@ export class GateRunner {
     }
 
     if (this.status !== 'running') return;
+    // Frozen while a teach/evaluate pop-up is up: visuals keep animating above,
+    // but steering, the road, and the boss all hold until the player continues.
+    if (this.phase !== 'run') return;
 
     if (this.pointerLane != null) {
       this.targetLane = this.pointerLane;
@@ -439,6 +523,18 @@ export class GateRunner {
     for (const r of this.rows) {
       r.z -= dz;
       if (!r.applied && r.z <= 0) this.applyRow(r);
+    }
+
+    // As the assignment gate nears (and every operation gate is resolved, since
+    // it is always last), freeze for the "how to evaluate" lesson. Resumed via
+    // continueFromTeach().
+    if (!this.taught) {
+      const assignRow = this.rows[this.rows.length - 1];
+      if (!assignRow.applied && assignRow.z <= TEACH_TRIGGER_Z) {
+        this.taught = true;
+        this.phase = 'teach';
+        return;
+      }
     }
 
     this.bossZ -= dz;
@@ -473,8 +569,9 @@ export class GateRunner {
     this.camX += (targetCam - this.camX) * Math.min(1, dt * 8);
   }
 
-  // Resolve a gate the instant it reaches the player line: apply the math, fire
-  // the matching juice, and float the like-terms / evaluation cue.
+  // Resolve a gate the instant it reaches the player line. Coefficient gates
+  // (±kx) combine into a, constant gates (±n) combine into b, and the last gate
+  // (assign) hands evaluation over to the player.
   private applyRow(r: GateRow) {
     const isLeft = this.lane < 0;
     const ch = isLeft ? r.left : r.right;
@@ -487,22 +584,49 @@ export class GateRunner {
       return;
     }
 
-    // Combine like terms into the running coefficient.
-    const before = this.coef;
-    const after = combineCoef(before, ch);
-    const otherAfter = combineCoef(before, other);
-    this.coef = after;
+    const isConst = ch.kind === 'addc' || ch.kind === 'subc';
+    const sym = ch.kind === 'subx' || ch.kind === 'subc' ? '−' : '+';
 
+    // Combine like terms: ±kx folds into a, ±n folds into b. The cue reads as a
+    // real like-terms line ("3x + 2x = 5x" or "5 + 3 = 8").
+    let main: string;
+    let after: number;
+    let otherAfter: number;
+    if (isConst) {
+      const before = this.constant;
+      after = combineConst(before, ch);
+      otherAfter = combineConst(before, other);
+      this.constant = after;
+      main = `${before} ${sym} ${ch.val} = ${after}`;
+    } else {
+      const before = this.coef;
+      after = combineCoef(before, ch);
+      otherAfter = combineCoef(before, other);
+      this.coef = after;
+      main = `${termX(before)} ${sym} ${termX(ch.val)} = ${termX(after)}`;
+    }
+    this.resolveGate(ch, other, isLeft, main, after, otherAfter, isConst);
+  }
+
+  // Shared good/bad juice so both gate families read identically: a subtract
+  // gate is a monster (combo break + red sting), an add gate pops the crowd and
+  // flags the smarter pick (DODGED a monster, or BIGGER than the other lane).
+  private resolveGate(
+    ch: Choice,
+    other: Choice,
+    isLeft: boolean,
+    main: string,
+    after: number,
+    otherAfter: number,
+    isConst: boolean,
+  ) {
     const px = this.crowdX();
-    const sym = ch.kind === 'subx' ? '−' : '+';
-    const main = `${termX(before)} ${sym} ${termX(ch.val)} = ${termX(after)}`;
-
-    if (ch.kind === 'subx') {
+    if (ch.kind === 'subx' || ch.kind === 'subc') {
       this.combo = 0;
       this.shake = Math.max(this.shake, 9);
       this.hitFlash = 1;
       this.enemyHitBurst(px, NEAR_Y - 16);
-      this.spawnCue(main, 'OUCH!', C.enemy);
+      this.spawnCue(main, 'OUCH!', isConst ? C.subc : C.enemy);
       return;
     }
 
@@ -514,7 +638,8 @@ export class GateRunner {
     this.gatePassBurst(gp.x, gp.y - GATE_NEAR_H * 0.5, ch.color);
 
     let tag = '';
-    if (other.kind === 'subx') {
+    const otherIsSub = other.kind === 'subx' || other.kind === 'subc';
+    if (otherIsSub) {
       const ep = this.project(isLeft ? 0.52 : -0.52, 0);
       this.dodgeSpark(ep.x, ep.y - GATE_NEAR_H * 0.5);
       tag = 'DODGED!';
@@ -525,15 +650,12 @@ export class GateRunner {
     this.spawnCue(main, tag, ch.color);
   }
 
-  // The final gate gives x a value. We EVALUATE the expression here — your
-  // coefficient × the assigned digit becomes your numeric value — with an
-  // emphasized beat so players watch the expression resolve to a number.
+  // The final gate gives x a value — but rather than auto-evaluating, we hand
+  // the arithmetic to the player. Record the digit, build a multiple-choice
+  // challenge, and pause in the 'eval' phase until submitEvaluation() is called.
   private applyAssign(ch: Choice, isLeft: boolean) {
-    const coef = this.coef;
     const digit = ch.val;
-    const value = coef * digit;
     this.assignedX = digit;
-    this.count = value;
     this.assigned = true;
 
     this.combo++;
@@ -546,10 +668,112 @@ export class GateRunner {
     const px = this.crowdX();
     const gp = this.project(isLeft ? -0.52 : 0.52, 0);
     this.gatePassBurst(gp.x, gp.y - GATE_NEAR_H * 0.5, C.assign);
-    this.comboConfetti(px, NEAR_Y - 30, 22);
+    this.comboConfetti(px, NEAR_Y - 30, 18);
+    this.spawnCue(`x = ${digit}`, '', C.assign);
 
-    // "5x → 5×7 = 35" — substitute x, then evaluate to a number.
-    this.spawnCue(`${termX(coef)} → ${coef}×${digit} = ${value}`, 'EVALUATE!', C.accent);
+    this.buildEvalChallenge(digit);
+    this.phase = 'eval';
+  }
+
+  // Build the "evaluate it yourself" multiple choice for a·x + b. Distractors
+  // mirror the classic mistakes: forgetting +b, adding before multiplying, and
+  // adding everything together.
+  private buildEvalChallenge(d: number) {
+    const a = this.coef;
+    const b = this.constant;
+    const answer = a * d + b;
+    this.evalAnswer = answer;
+
+    const opts = new Set<number>();
+    opts.add(answer);
+    const candidates = [
+      a * d, // forgot to add the constant
+      a * (d + b), // added the constant before multiplying
+      a + d + b, // added everything instead of multiplying
+      a * d - b, // flipped the sign of the constant
+    ];
+    for (const c of candidates) {
+      if (opts.size >= 4) break;
+      if (c !== answer && c >= 0) opts.add(c);
+    }
+    let pad = answer + 2;
+    while (opts.size < 4) {
+      if (pad >= 0 && pad !== answer) opts.add(pad);
+      pad += 3;
+    }
+
+    const arr = Array.from(opts);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    this.evalOptions = arr;
+  }
+
+  /** The current expression ax + b as text (for overlays), e.g. "3x + 5". */
+  exprLabel(): string {
+    return fmtExpr(this.coef, this.constant);
+  }
+  /** The arithmetic line for a chosen x, e.g. "3 × 7 + 5" (or "… − 4"). */
+  evalLine(x: number): string {
+    const b = this.constant;
+    const prod = `${this.coef} × ${x}`;
+    if (b === 0) return prod;
+    return b > 0 ? `${prod} + ${b}` : `${prod} − ${Math.abs(b)}`;
+  }
+  /** The numeric value of a·x + b for a chosen x. */
+  evalValue(x: number): number {
+    return this.coef * x + this.constant;
+  }
+  /** Kid-friendly worked steps for evaluating at a chosen x (teach + feedback). */
+  evalSteps(x: number): string[] {
+    const a = this.coef;
+    const b = this.constant;
+    const prod = a * x;
+    const steps = [`Put ${x} in for x`, `Multiply first: ${a} × ${x} = ${prod}`];
+    if (b === 0) steps.push(`No constant to add, so it stays ${prod}`);
+    else if (b > 0) steps.push(`Then add the constant: ${prod} + ${b} = ${prod + b}`);
+    else steps.push(`Then subtract the constant: ${prod} − ${Math.abs(b)} = ${prod + b}`);
+    return steps;
+  }
+
+  /** Dismiss the teach pop-up and let the player steer through the assignment gate. */
+  continueFromTeach() {
+    if (this.phase === 'teach') this.phase = 'run';
+  }
+
+  /**
+   * Record the player's own evaluation of a·x + b. The correct value becomes the
+   * score either way (gentle — no harsh penalty); returns whether the pick was
+   * right so the UI can celebrate or show the worked steps.
+   */
+  submitEvaluation(value: number): boolean {
+    if (this.phase !== 'eval' || this.evalAnswered) return this.evalCorrect;
+    const correct = value === this.evalAnswer;
+    this.evalAnswered = true;
+    this.evalPicked = value;
+    this.evalCorrect = correct;
+    this.count = Math.max(0, this.evalAnswer);
+    this.evaluated = true;
+
+    const px = this.crowdX();
+    const line = `${this.evalLine(this.assignedX)} = ${this.evalAnswer}`;
+    if (correct) {
+      this.whiteFlash = 0.7;
+      this.comboPulse = 1;
+      this.crowdPop = 1;
+      this.comboConfetti(px, NEAR_Y - 30, 26);
+      this.spawnCue(line, 'EVALUATE!', C.assign);
+    } else {
+      this.combo = 0;
+      this.spawnCue(line, 'CHECK IT', C.combo2);
+    }
+    return correct;
+  }
+
+  /** Leave the evaluation pop-up and send the (now numeric) crowd at the boss. */
+  continueFromEval() {
+    if (this.phase === 'eval' && this.evalAnswered) this.phase = 'run';
   }
 
   private hitBoss() {
@@ -749,7 +973,7 @@ export class GateRunner {
     const h = GATE_NEAR_H * s * (1 + near * 0.04);
     if (h < 2) return;
 
-    if (ch.kind === 'subx') this.drawEnemy(ctx, ch, p.x, p.y, w, h, s, near);
+    if (ch.kind === 'subx' || ch.kind === 'subc') this.drawEnemy(ctx, ch, p.x, p.y, w, h, s, near);
     else this.drawGate(ctx, ch, p.x, p.y, w, h, s, near);
   }
 
@@ -796,16 +1020,20 @@ export class GateRunner {
     const cy = baseY - h * 0.5;
     const bw = w * 0.72;
     const bh = h * 0.8;
+    // Constant monsters (−n) wear amber; coefficient monsters (−kx) wear coral.
+    const isConstMonster = ch.kind === 'subc';
+    const auraColor = isConstMonster ? '#d97706' : '#e11d48';
+    const browColor = isConstMonster ? '#7c2d12' : '#7f1d1d';
 
     // Slowly rotating spiky aura.
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(this.tick * 0.012);
     if (near > 0.02) {
-      ctx.shadowColor = C.enemy;
+      ctx.shadowColor = ch.color;
       ctx.shadowBlur = 16 * near;
     }
-    ctx.fillStyle = '#e11d48';
+    ctx.fillStyle = auraColor;
     const spikes = 10;
     const outer = Math.max(bw, bh) * 0.66;
     const inner = outer * 0.74;
@@ -843,7 +1071,7 @@ export class GateRunner {
     ctx.arc(cx + eo, ey + es * 0.2, es * 0.5, 0, Math.PI * 2);
     ctx.fill();
     if (s > 0.3) {
-      ctx.strokeStyle = '#7f1d1d';
+      ctx.strokeStyle = browColor;
       ctx.lineWidth = Math.max(2, 3 * s);
       ctx.lineCap = 'round';
       ctx.beginPath();
@@ -941,10 +1169,10 @@ export class GateRunner {
   private drawCrowd(ctx: CanvasRenderingContext2D) {
     const px = this.crowdX();
 
-    // The crowd IS your expression: while unassigned each runner is an "x", so
-    // the crowd size tracks the coefficient. Once x is assigned, the crowd
-    // explodes to the evaluated number.
-    const expr = !this.assigned;
+    // The crowd IS your expression: while you are still ax + b each runner is an
+    // "x", so the crowd size tracks the coefficient a. Once you evaluate it, the
+    // crowd explodes to the resulting number.
+    const expr = !this.evaluated;
     const magnitude = expr ? this.coef : this.count;
     const shown = Math.max(1, Math.min(DOT_CAP, magnitude));
     const baseScale = expr ? 1.0 + Math.min(0.95, this.coef / 26) : 1.1 + Math.min(1.4, this.count / 170);
@@ -979,7 +1207,7 @@ export class GateRunner {
     }
     ctx.restore();
 
-    this.drawBubble(ctx, px, expr ? termX(this.coef) : this.count.toLocaleString());
+    this.drawBubble(ctx, px, expr ? fmtExpr(this.coef, this.constant) : this.count.toLocaleString());
   }
 
   private drawBubble(ctx: CanvasRenderingContext2D, px: number, label: string) {
@@ -994,7 +1222,7 @@ export class GateRunner {
     this.roundRect(ctx, -w / 2, -18, w, 36, 18);
     ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = this.assigned ? C.combo2 : C.assign;
+    ctx.strokeStyle = this.evaluated ? C.combo2 : C.assign;
     this.roundRect(ctx, -w / 2, -18, w, 36, 18);
     ctx.stroke();
     ctx.fillStyle = '#ffffff';
@@ -1163,10 +1391,17 @@ export class GateRunner {
   debugSnapshot() {
     return {
       s: this.status,
+      phase: this.phase,
       c: this.count,
       coef: this.coef,
+      b: this.constant,
+      expr: this.exprLabel(),
       assigned: this.assigned,
+      evaluated: this.evaluated,
       x: this.assignedX,
+      ans: this.evalAnswer,
+      opts: this.evalOptions,
+      picked: this.evalPicked,
       lane: Number(this.lane.toFixed(2)),
       boss: this.bossPower,
       combo: this.combo,

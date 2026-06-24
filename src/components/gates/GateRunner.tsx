@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { GateRunner as Engine, GateStatus, GW, GH } from '../../game/gates/engine';
+import { GateRunner as Engine, GateStatus, RunPhase, GW, GH } from '../../game/gates/engine';
 
 interface Props {
   /** Called once when the player crosses the finish line. */
@@ -11,16 +11,49 @@ interface Props {
   active?: boolean;
 }
 
+// Snapshots captured from the engine when a pop-up opens, so the overlays render
+// from React state (never by reading the engine ref during render).
+interface TeachData {
+  expr: string;
+  coef: number;
+  constant: number;
+  steps: string[];
+  example: number;
+}
+interface EvalData {
+  expr: string;
+  x: number;
+  line: string;
+  options: number[];
+  answer: number;
+  steps: string[];
+}
+interface Recap {
+  expr: string;
+  x: number;
+  correct: boolean;
+}
+
 const LEFT_KEYS = new Set(['ArrowLeft', 'KeyA']);
 const RIGHT_KEYS = new Set(['ArrowRight', 'KeyD']);
 const START_KEYS = new Set(['Space', 'Enter', 'ArrowUp', 'KeyW']);
+
+// The neutral value the teach pop-up evaluates as a worked example. Kept apart
+// from the assignment digits (4..9) so it never spoils the upcoming choice.
+const TEACH_X = 2;
 
 export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = true }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const [status, setStatus] = useState<GateStatus>('ready');
+  const [phase, setPhase] = useState<RunPhase>('run');
+  const [teachData, setTeachData] = useState<TeachData | null>(null);
+  const [evalData, setEvalData] = useState<EvalData | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [pickedCorrect, setPickedCorrect] = useState<boolean | null>(null);
   const [finalCount, setFinalCount] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
+  const [recap, setRecap] = useState<Recap | null>(null);
   const activeRef = useRef(active);
   useEffect(() => {
     activeRef.current = active;
@@ -42,12 +75,14 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
     engine.onComplete = (count) => {
       setFinalCount(count);
       setBestCombo(engine.bestCombo);
+      setRecap({ expr: engine.exprLabel(), x: engine.assignedX, correct: engine.evalCorrect });
       onFinish?.(count);
     };
 
     let raf = 0;
     let last = performance.now();
     let lastStatus: GateStatus = engine.status;
+    let lastPhase: RunPhase = engine.phase;
     const loop = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
@@ -57,6 +92,32 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
         if (engine.status !== lastStatus) {
           lastStatus = engine.status;
           setStatus(engine.status);
+        }
+        if (engine.phase !== lastPhase) {
+          lastPhase = engine.phase;
+          // Mirror the data each pop-up needs the moment it opens.
+          if (engine.phase === 'teach') {
+            setTeachData({
+              expr: engine.exprLabel(),
+              coef: engine.coef,
+              constant: engine.constant,
+              steps: engine.evalSteps(TEACH_X),
+              example: engine.evalValue(TEACH_X),
+            });
+          } else if (engine.phase === 'eval') {
+            // Fresh challenge: clear any prior pick before showing the choices.
+            setPicked(null);
+            setPickedCorrect(null);
+            setEvalData({
+              expr: engine.exprLabel(),
+              x: engine.assignedX,
+              line: engine.evalLine(engine.assignedX),
+              options: engine.evalOptions.slice(),
+              answer: engine.evalAnswer,
+              steps: engine.evalSteps(engine.assignedX),
+            });
+          }
+          setPhase(engine.phase);
         }
         if (import.meta.env.DEV) {
           canvas.dataset.gates = JSON.stringify(engine.debugSnapshot());
@@ -70,8 +131,10 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
       const el = document.activeElement;
       return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
     };
+    // Steering is locked while a teach/evaluate pop-up owns the screen.
+    const isPaused = () => engine.status === 'running' && engine.phase !== 'run';
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTyping() || !activeRef.current) return;
+      if (isTyping() || !activeRef.current || isPaused()) return;
       if (LEFT_KEYS.has(e.code)) {
         e.preventDefault();
         engine.primary();
@@ -110,6 +173,8 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const engine = engineRef.current;
     if (!engine) return;
+    // Don't steer through the pop-ups — let the overlay buttons handle taps.
+    if (engine.status === 'running' && engine.phase !== 'run') return;
     engine.primary();
     e.currentTarget.setPointerCapture(e.pointerId);
     engine.setPointerX(worldXFromEvent(e));
@@ -126,17 +191,25 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
     }
   }, []);
 
+  const handlePick = useCallback((opt: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    const correct = engine.submitEvaluation(opt);
+    setPicked(opt);
+    setPickedCorrect(correct);
+  }, []);
+
   const headline =
     finalCount >= 1000
       ? 'JACKPOT!'
-      : finalCount >= 185
+      : finalCount >= 125
         ? 'Incredible!'
-        : finalCount >= 130
+        : finalCount >= 85
           ? 'Huge run!'
-          : finalCount >= 75
+          : finalCount >= 50
             ? 'Nice run!'
             : 'Finish!';
-  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 185 ? '🚀' : '🎉';
+  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 125 ? '🚀' : '🎉';
 
   return (
     <div className="w-full max-w-[430px] mx-auto">
@@ -155,16 +228,138 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
             <div className="bg-black/55 backdrop-blur-sm rounded-2xl px-6 py-5">
               <p className="font-display text-white font-extrabold text-2xl">Gate Runner</p>
               <p className="text-white/85 mt-2 text-[15px] leading-snug">
-                You <b>are</b> an expression in <b>x</b>! Start as <b>x</b> and steer into the green{' '}
-                <b className="text-lime">+x</b> gates to <b>combine like terms</b> — watch yourself grow{' '}
-                <b>x → 3x → 5x</b>. Always grab the <b>bigger</b> add.
+                You <b>are</b> the expression <b className="text-primary-light">ax + b</b>! Steer into green{' '}
+                <b className="text-lime">+x</b> gates to grow your <b>x's</b> (combine like terms) and cyan{' '}
+                <b className="text-cyan">+number</b> gates to add a <b>constant</b> — building something like{' '}
+                <b>3x + 5</b>.
               </p>
               <p className="text-white/85 mt-2 text-[15px] leading-snug">
-                Dodge the <b className="text-coral">−x subtract monsters</b>. At the finish, x gets a value and you{' '}
-                <b className="text-primary-light">EVALUATE</b> (<b>5x → 5×7 = 35</b>) — then survive the{' '}
-                <b>boss</b>!
+                Dodge the <b className="text-coral">−x</b> and <b className="text-amber">−number</b> monsters. At the
+                end, x gets a value and <b className="text-primary-light">YOU evaluate</b> your own expression — then
+                survive the <b>boss</b>!
               </p>
               <p className="text-white/70 text-sm mt-3">Drag, or use ← → · Tap to start</p>
+            </div>
+          </div>
+        )}
+
+        {status === 'running' && phase === 'teach' && teachData && (
+          <div className="absolute inset-0 flex items-center justify-center px-4 animate-fadein">
+            <div className="bg-white rounded-2xl px-6 py-5 text-center shadow-2xl w-full max-w-[330px]">
+              <p className="text-2xl">🧮</p>
+              <p className="font-display tracking-[0.2em] text-text-muted text-[11px] font-bold mt-1">EVALUATE TIME</p>
+              <p className="text-text text-[15px] mt-2 leading-snug">
+                You built <b className="text-primary font-display">{teachData.expr}</b>! Next, <b>x</b> gets a value.
+              </p>
+              <div className="mt-3 bg-surface-light rounded-xl px-4 py-3 text-left">
+                <p className="text-text text-[13px] font-bold">How to evaluate:</p>
+                <ol className="text-text-muted text-[13px] mt-1 leading-relaxed list-decimal list-inside">
+                  <li>
+                    Put the number in for <b>x</b>
+                  </li>
+                  <li>
+                    <b className="text-primary">Multiply {teachData.coef} × x first</b>
+                  </li>
+                  <li>
+                    {teachData.constant === 0 ? (
+                      <>No constant to add — done!</>
+                    ) : teachData.constant > 0 ? (
+                      <>
+                        Then <b className="text-cyan">add the {teachData.constant}</b>
+                      </>
+                    ) : (
+                      <>
+                        Then <b className="text-amber">subtract the {Math.abs(teachData.constant)}</b>
+                      </>
+                    )}
+                  </li>
+                </ol>
+              </div>
+              <div className="mt-3 text-left">
+                <p className="text-text-muted text-[12px] font-bold">For example, if x = {TEACH_X}:</p>
+                <ul className="mt-1 space-y-0.5">
+                  {teachData.steps.map((s, i) => (
+                    <li key={i} className="text-text text-[13px]">
+                      • {s}
+                    </li>
+                  ))}
+                </ul>
+                <p className="font-display text-primary font-bold text-[15px] mt-1">
+                  {teachData.expr} → {teachData.example}
+                </p>
+              </div>
+              <button
+                onClick={() => engineRef.current?.continueFromTeach()}
+                className="mt-4 w-full bg-primary hover:bg-primary-dark text-white font-display font-bold px-6 py-3 rounded-xl transition-colors"
+              >
+                Got it! Pick my x →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status === 'running' && phase === 'eval' && evalData && (
+          <div className="absolute inset-0 flex items-center justify-center px-4 animate-fadein">
+            <div className="bg-white rounded-2xl px-6 py-5 text-center shadow-2xl w-full max-w-[340px]">
+              {picked === null ? (
+                <>
+                  <p className="font-display tracking-[0.2em] text-text-muted text-[11px] font-bold">YOUR TURN!</p>
+                  <p className="text-text text-[15px] mt-2 leading-snug">
+                    You are <b className="text-primary font-display">{evalData.expr}</b> and <b>x = {evalData.x}</b>.
+                  </p>
+                  <p className="font-display text-text font-bold text-lg mt-3">What is {evalData.line}?</p>
+                  <div className="mt-4 grid grid-cols-2 gap-2.5">
+                    {evalData.options.map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => handlePick(opt)}
+                        className="font-display text-xl font-bold text-primary bg-surface-light hover:bg-primary/10 border-2 border-primary/20 rounded-xl py-3 active:scale-95 transition-transform tabular-nums"
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : pickedCorrect ? (
+                <>
+                  <p className="text-3xl">🎉</p>
+                  <p className="font-display text-lime font-extrabold text-xl mt-1">Correct!</p>
+                  <p className="text-text text-[15px] mt-2">
+                    {evalData.line} = <b className="tabular-nums">{evalData.answer}</b>
+                  </p>
+                  <p className="text-text-muted text-[13px] mt-1">You evaluated it yourself! 🌟</p>
+                  <button
+                    onClick={() => engineRef.current?.continueFromEval()}
+                    className="mt-5 w-full bg-primary hover:bg-primary-dark text-white font-display font-bold px-6 py-3 rounded-xl transition-colors"
+                  >
+                    Face the boss! 👹
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl">📘</p>
+                  <p className="font-display text-primary font-extrabold text-lg mt-1">Let's check it together</p>
+                  <p className="text-text-muted text-[13px] mt-1">
+                    You picked <b className="text-coral tabular-nums">{picked}</b>. Here's the step-by-step:
+                  </p>
+                  <ul className="mt-2 text-left space-y-1 bg-surface-light rounded-xl px-4 py-3">
+                    {evalData.steps.map((s, i) => (
+                      <li key={i} className="text-text text-[13px]">
+                        • {s}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="font-display text-text font-bold text-[15px] mt-2">
+                    So {evalData.line} = <b className="text-lime tabular-nums">{evalData.answer}</b>
+                  </p>
+                  <button
+                    onClick={() => engineRef.current?.continueFromEval()}
+                    className="mt-4 w-full bg-primary hover:bg-primary-dark text-white font-display font-bold px-6 py-3 rounded-xl transition-colors"
+                  >
+                    Got it — face the boss! 👹
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -178,6 +373,16 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
               <p className="font-display text-primary text-5xl font-extrabold tabular-nums leading-none mt-1">
                 {finalCount.toLocaleString()}
               </p>
+              {recap && (
+                <p className="text-text-muted text-[13px] mt-2">
+                  You were <b className="text-primary font-display">{recap.expr}</b> · x = {recap.x}
+                </p>
+              )}
+              {recap?.correct && (
+                <p className="mt-2 inline-block bg-lime/15 text-lime font-display font-bold text-sm rounded-full px-3 py-1">
+                  ✅ You evaluated it yourself!
+                </p>
+              )}
               {bestCombo >= 2 && (
                 <p className="mt-3 inline-block bg-amber/15 text-amber font-display font-bold text-sm rounded-full px-3 py-1">
                   🔥 Best combo ×{bestCombo}

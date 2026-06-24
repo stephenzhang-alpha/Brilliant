@@ -306,6 +306,14 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
 
   const wrongOption = wrongPick ? VARIABLE_OPTIONS.find((o) => o.id === wrongPick) : null;
 
+  // The single below-canvas pop-up walks through three phases without ever
+  // covering the running game: explain → check → celebrate.
+  const tutorialPhase: 'lesson' | 'quiz' | 'done' = quizDone
+    ? 'done'
+    : tutorialStep === 'quiz'
+      ? 'quiz'
+      : 'lesson';
+
   return (
     <div className="w-full">
       <div
@@ -387,109 +395,150 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
         )}
       </div>
 
-      {/* --- Variables onboarding --- */}
-      {tutorialStep === 'lesson' && (
-        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5 animate-fadein">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl" aria-hidden>🔢</span>
-            <h3 className="font-display font-extrabold text-xl text-text">Meet your first variable</h3>
-          </div>
-          <p className="text-text-muted mt-2 text-sm leading-relaxed">
-            A <span className="font-bold text-primary">variable</span> is a quantity whose value can{' '}
-            <span className="italic font-semibold text-text">change</span>. See the{' '}
-            <span className="font-semibold text-amber">score</span> and{' '}
-            <span className="font-semibold text-amber">high score</span> in the top-right corner of the
-            game? Each one is a variable — watch the score climb as your dino runs!
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/25 rounded-xl px-3 py-2">
-              <span className="font-display font-bold text-primary">score</span>
-              <span className="text-text-muted">=</span>
-              <span className="font-mono font-extrabold text-text tabular-nums text-lg">{liveScore}</span>
-              <span className="text-text-muted text-xs">…and counting</span>
-            </div>
-            <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/25 rounded-xl px-3 py-2">
-              <span className="font-display font-bold text-accent">high score</span>
-              <span className="text-text-muted">=</span>
-              <span className="font-mono font-extrabold text-text tabular-nums text-lg">{liveHigh}</span>
-            </div>
-          </div>
-          <p className="text-text-muted mt-3 text-xs">
-            Those changing numbers are exactly what algebra means by a variable.
-          </p>
-          <button
-            onClick={onLessonNext}
-            className="btn-pop mt-4 bg-primary text-white font-display font-bold px-7 py-2.5 rounded-xl"
-          >
-            Got it — quiz me! →
-          </button>
-        </div>
-      )}
+      {/* --- Variables onboarding: ONE tidy pop-up BELOW the running game --- */}
+      {tutorialStep !== null && (
+        <div className="mt-4 animate-fadein">
+          <div className="relative rounded-2xl border border-primary/15 bg-surface shadow-xl shadow-primary/20">
+            {/* Speech-bubble tail — points up at the dino still running above. */}
+            <div
+              aria-hidden
+              className="absolute -top-1.5 left-8 h-3 w-3 rotate-45 rounded-[2px] bg-primary"
+            />
 
-      {tutorialStep === 'quiz' && (
-        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5 animate-fadein">
-          {!quizDone ? (
-            <>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl" aria-hidden>🎯</span>
-                <h3 className="font-display font-extrabold text-xl text-text">{VARIABLE_QUESTION}</h3>
+            {/* Header ribbon */}
+            <div className="flex items-center gap-3 rounded-t-2xl bg-gradient-to-r from-primary via-accent to-cyan px-5 py-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/20 text-xl" aria-hidden>
+                🔢
+              </span>
+              <div className="min-w-0">
+                <p className="font-display text-lg font-extrabold leading-tight text-white">
+                  Meet your first variable
+                </p>
+                <p className="text-xs font-semibold text-white/80">
+                  Watch the numbers on your game change in real time
+                </p>
               </div>
-              <p className="text-text-muted mt-1 text-sm">
-                Remember: a variable&apos;s value can change. Your score{' '}
-                <span className="font-mono font-bold text-primary">= {liveScore}</span> keeps changing as
-                the dino runs.
-              </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                {VARIABLE_OPTIONS.map((opt) => {
-                  const isWrongPick = wrongPick === opt.id;
-                  return (
-                    <button
-                      key={opt.id}
-                      onClick={() => onPickOption(opt)}
-                      className={[
-                        'btn-pop text-left rounded-xl border-2 px-4 py-3 transition-colors',
-                        isWrongPick
-                          ? 'border-coral bg-coral/10'
-                          : 'border-black/10 bg-surface-light hover:border-primary hover:bg-primary/5',
-                      ].join(' ')}
-                    >
-                      <span className="font-display font-bold text-text block">{opt.label}</span>
-                      <span className="text-text-muted text-xs block mt-0.5">{opt.hint}</span>
-                      {isWrongPick && (
-                        <span className="text-coral text-xs font-semibold block mt-1">not this one</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {wrongOption && (
-                <div className="mt-3 flex items-start gap-2 bg-coral/10 border border-coral/30 rounded-xl px-3 py-2 animate-fadein">
-                  <span className="text-lg leading-none" aria-hidden>💡</span>
-                  <p className="text-sm text-text">
-                    {wrongOption.feedback}{' '}
-                    <span className="text-text-muted font-semibold">Give it another try!</span>
-                  </p>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center">
-              <p className="text-3xl" aria-hidden>🎉</p>
-              <h3 className="font-display font-extrabold text-xl mt-1 text-text">
-                Yes! Your score is a variable.
-              </h3>
-              <p className="text-text-muted mt-1.5 text-sm max-w-md mx-auto">
-                Its value changes as you play — that&apos;s exactly what a variable is. Now for the real
-                run: the obstacles are coming, so get ready to jump!
-              </p>
-              <button
-                onClick={onFinish}
-                className="btn-pop mt-4 bg-primary text-white font-display font-extrabold text-lg px-9 py-3 rounded-2xl animate-pulse"
-              >
-                ▶ Play for real!
-              </button>
             </div>
-          )}
+
+            <div className="p-5">
+              {/* Live readouts of the two example variables — always on screen,
+                  updating in real time, so the lesson can point right at them. */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border-2 border-primary/25 bg-primary/5 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-display text-sm font-bold text-primary">score</span>
+                    <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-primary">
+                      variable
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1.5">
+                    <span className="font-mono text-2xl font-extrabold tabular-nums text-text">{liveScore}</span>
+                    <span className="text-xs font-semibold text-success">▲ climbing</span>
+                  </div>
+                </div>
+                <div className="rounded-xl border-2 border-accent/25 bg-accent/5 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-display text-sm font-bold text-accent">highScore</span>
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-accent">
+                      variable
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-baseline gap-1.5">
+                    <span className="font-mono text-2xl font-extrabold tabular-nums text-text">{liveHigh}</span>
+                    <span className="text-xs font-semibold text-text-muted">
+                      {liveHigh > 0 ? 'your best' : 'set a record!'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Phase body swaps beneath the persistent readouts. */}
+              <div key={tutorialPhase} className="animate-fadein">
+                {tutorialPhase === 'lesson' && (
+                  <>
+                    <p className="mt-4 text-sm leading-relaxed text-text-muted">
+                      A <span className="font-bold text-primary">variable</span> is a{' '}
+                      <span className="font-semibold text-text">named quantity whose value can change</span> as you
+                      play. Up in the game, <span className="font-mono font-bold text-primary">score</span> climbs
+                      every step your dino runs, and{' '}
+                      <span className="font-mono font-bold text-accent">highScore</span> changes the moment you beat
+                      your record. Same name, new value — that&apos;s a variable!
+                    </p>
+                    <button
+                      onClick={onLessonNext}
+                      className="btn-pop mt-4 rounded-xl bg-primary px-7 py-2.5 font-display font-bold text-white"
+                    >
+                      Got it — quiz me! →
+                    </button>
+                  </>
+                )}
+
+                {tutorialPhase === 'quiz' && (
+                  <>
+                    <h4 className="mt-4 flex items-center gap-2 font-display text-lg font-extrabold text-text">
+                      <span aria-hidden>🎯</span> {VARIABLE_QUESTION}
+                    </h4>
+                    <p className="mt-1 text-sm text-text-muted">
+                      Remember: a variable&apos;s value can change — like{' '}
+                      <span className="font-mono font-bold text-primary">score = {liveScore}</span> climbing right
+                      now.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      {VARIABLE_OPTIONS.map((opt) => {
+                        const isWrongPick = wrongPick === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            onClick={() => onPickOption(opt)}
+                            className={[
+                              'btn-pop rounded-xl border-2 px-4 py-3 text-left transition-colors',
+                              isWrongPick
+                                ? 'border-coral bg-coral/10'
+                                : 'border-black/10 bg-surface-light hover:border-primary hover:bg-primary/5',
+                            ].join(' ')}
+                          >
+                            <span className="block font-display font-bold text-text">{opt.label}</span>
+                            <span className="mt-0.5 block text-xs text-text-muted">{opt.hint}</span>
+                            {isWrongPick && (
+                              <span className="mt-1 block text-xs font-semibold text-coral">not this one</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {wrongOption && (
+                      <div className="mt-3 flex items-start gap-2 rounded-xl border border-coral/30 bg-coral/10 px-3 py-2 animate-fadein">
+                        <span className="text-lg leading-none" aria-hidden>💡</span>
+                        <p className="text-sm text-text">
+                          {wrongOption.feedback}{' '}
+                          <span className="font-semibold text-text-muted">Give it another try!</span>
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {tutorialPhase === 'done' && (
+                  <div className="mt-4 text-center">
+                    <p className="text-3xl" aria-hidden>🎉</p>
+                    <h4 className="mt-1 font-display text-xl font-extrabold text-text">
+                      Yes! Your score is a variable.
+                    </h4>
+                    <p className="mx-auto mt-1.5 max-w-md text-sm text-text-muted">
+                      Its value keeps changing as you play — exactly what a variable is. Now for the real run:
+                      the obstacles are coming, so get ready to jump!
+                    </p>
+                    <button
+                      onClick={onFinish}
+                      className="btn-pop mt-4 rounded-2xl bg-primary px-9 py-3 font-display text-lg font-extrabold text-white animate-pulse"
+                    >
+                      ▶ Play for real!
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

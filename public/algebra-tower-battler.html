@@ -19,72 +19,85 @@
 
   /* ---------- HUD ---------- */
   .hud {
-    position:relative; z-index:7; display:flex; align-items:center; gap:8px;
-    padding:9px 12px; flex:0 0 auto;
+    position:relative; z-index:7; display:flex; align-items:center;
+    gap:clamp(5px,1.6vw,10px); padding:clamp(6px,1.7vw,11px) clamp(9px,2.6vw,15px); flex:0 0 auto;
   }
-  .lvl { display:flex; flex-direction:column; gap:3px; }
-  .lvl .lvlText { font-weight:700; font-size:15px; letter-spacing:.02em; }
+  .lvl { display:flex; flex-direction:column; gap:3px; min-width:0; flex:0 1 auto; }
+  .lvl .lvlText { font-weight:700; font-size:clamp(13px,3.4vw,16px); letter-spacing:.01em; white-space:nowrap; }
   .pips { display:flex; gap:5px; }
-  .pips i { width:9px; height:9px; border-radius:99px; background:rgba(255,255,255,.3); transition:.25s; }
+  .pips i { width:clamp(7px,2vw,9px); height:clamp(7px,2vw,9px); border-radius:99px; background:rgba(255,255,255,.28); transition:.25s; }
   .pips i.on { background:#fde68a; box-shadow:0 0 8px #fde68a; transform:scale(1.15); }
-  .pips i.done { background:var(--green); }
-  .spacer { flex:1; }
+  .pips i.done { background:var(--green); box-shadow:0 0 7px rgba(34,197,94,.65); }
+  .spacer { flex:1 1 auto; }
+  .stats { display:flex; align-items:center; gap:clamp(5px,1.6vw,9px); flex:0 0 auto; }
   .chip {
-    display:flex; align-items:center; gap:6px; background:rgba(0,0,0,.26);
-    border:2px solid rgba(255,255,255,.26); border-radius:999px; padding:5px 13px;
-    font-size:15px; font-weight:600; white-space:nowrap;
+    display:flex; align-items:center; gap:clamp(3px,1vw,6px); background:rgba(0,0,0,.28);
+    border:2px solid rgba(255,255,255,.2); border-radius:999px; padding:clamp(3px,1vw,6px) clamp(8px,2.2vw,13px);
+    font-size:clamp(12px,3vw,15px); font-weight:600; white-space:nowrap; line-height:1;
   }
-  .chip b { color:#fde68a; font-size:19px; min-width:14px; text-align:center; display:inline-block; }
+  .chip b { font-size:clamp(14px,3.6vw,19px); min-width:12px; text-align:center; display:inline-block; }
+  .chip.scorechip b { color:#fde68a; }
+  .chip.retrychip { color:#ede9fe; }
+  .chip.retrychip b { color:#fbcfe8; }
   .chip.lvlchip { background:linear-gradient(180deg,#34d399,#059669); border-color:rgba(255,255,255,.4); color:#fff; }
-  .chip.lvlchip.zero { opacity:.45; }
+  .chip.lvlchip.zero { opacity:.5; }
   .chip.scorechip.bump b { animation:numPop .55s cubic-bezier(.3,1.5,.5,1); }
   @keyframes numPop { 0%{transform:scale(1)} 32%{transform:scale(1.6); color:#fff; text-shadow:0 0 16px #fff} 100%{transform:scale(1)} }
   .mute {
-    flex:0 0 auto; width:36px; height:36px; border-radius:12px; border:2px solid rgba(255,255,255,.26);
-    background:rgba(0,0,0,.26); color:#fff; font-size:17px; cursor:pointer; line-height:1;
+    flex:0 0 auto; width:clamp(30px,8vw,38px); height:clamp(30px,8vw,38px); border-radius:12px;
+    border:2px solid rgba(255,255,255,.2); background:rgba(0,0,0,.28); color:#fff;
+    font-size:clamp(14px,4vw,18px); cursor:pointer; line-height:1; display:flex; align-items:center; justify-content:center;
   }
   .mute:active { transform:translateY(1px); }
+  /* ultra-narrow: drop the non-essential level-tally chip so Level/score/retries always fit */
+  @media (max-width:340px) { .chip.lvlchip { display:none; } }
 
   /* ---------- scene ---------- */
   .scene { position:relative; flex:1 1 auto; min-height:0; overflow:hidden; }
   #cv { position:absolute; inset:0; display:block; touch-action:manipulation; }
 
-  .help {
-    position:absolute; left:50%; top:8px; transform:translateX(-50%); z-index:4;
-    pointer-events:none; max-width:94%; text-align:center;
-    font-size:12.5px; font-weight:600; line-height:1.3; color:#fff;
-    background:rgba(20,12,50,.4); border:1px solid rgba(255,255,255,.18);
-    padding:6px 13px; border-radius:999px; backdrop-filter:blur(3px);
+  /* ---------- legend (sturdy flex sub-header, never overlaps the canvas) ---------- */
+  .legend {
+    position:relative; z-index:6; flex:0 0 auto; display:flex; flex-wrap:wrap; justify-content:center;
+    align-items:center; gap:clamp(5px,1.6vw,9px); padding:0 clamp(9px,2.6vw,15px) clamp(6px,1.5vw,9px);
   }
-  .help b { color:#fde68a; }
+  .legend .key {
+    display:inline-flex; align-items:center; gap:5px; background:rgba(20,12,50,.34);
+    border:1px solid rgba(255,255,255,.16); border-radius:999px;
+    padding:clamp(3px,1vw,5px) clamp(8px,2vw,11px); font-size:clamp(10.5px,2.8vw,12.5px); font-weight:600; white-space:nowrap;
+  }
+  .legend .key b { font-weight:800; }
+  .legend .key .g { color:#bbf7d0; }
+  .legend .key .r { color:#fecaca; }
 
   /* ---------- banner ---------- */
   .banner {
     position:absolute; left:50%; top:42%; transform:translate(-50%,-50%) scale(.6);
-    z-index:8; pointer-events:none; text-align:center; opacity:0;
+    z-index:8; pointer-events:none; text-align:center; opacity:0; width:min(92%,440px);
   }
   .banner.show { animation:bannerPop 1.7s cubic-bezier(.3,1.4,.5,1) forwards; }
   .banner.hold.show { animation:bannerHold 2.2s ease forwards; }
   @keyframes bannerPop { 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)} 18%{opacity:1;transform:translate(-50%,-50%) scale(1.05)} 78%{opacity:1;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-58%) scale(1)} }
   @keyframes bannerHold { 0%{opacity:0;transform:translate(-50%,-50%) scale(.5)} 14%{opacity:1;transform:translate(-50%,-50%) scale(1.05)} 86%{opacity:1;transform:translate(-50%,-50%) scale(1)} 100%{opacity:0;transform:translate(-50%,-58%) scale(1)} }
-  .banner .big { font-size:40px; font-weight:700; text-shadow:0 4px 0 rgba(0,0,0,.25), 0 0 22px rgba(253,224,138,.6); }
-  .banner .sub { margin-top:6px; font-size:14.5px; font-weight:600; max-width:300px; line-height:1.35; opacity:.96; }
+  .banner .big { font-size:clamp(28px,8.5vw,44px); font-weight:700; text-shadow:0 4px 0 rgba(0,0,0,.25), 0 0 22px rgba(253,224,138,.55); }
+  .banner .sub { margin:7px auto 0; font-size:clamp(13px,3.7vw,15.5px); font-weight:600; max-width:340px; line-height:1.36; opacity:.97; }
   .banner.good .big { color:#fde68a; }
   .banner.bad .big { color:#fecaca; }
 
   /* ---------- question sheet ---------- */
   .sheet {
-    position:absolute; left:0; right:0; bottom:0; z-index:9;
-    background:#fff; color:var(--ink); border-radius:24px 24px 0 0;
-    padding:14px 16px calc(16px + env(safe-area-inset-bottom));
-    box-shadow:0 -12px 40px rgba(0,0,0,.45);
-    transform:translateY(112%); transition:transform .32s cubic-bezier(.3,1.1,.5,1);
-    pointer-events:none; max-height:74%; overflow:auto;
+    position:absolute; left:0; right:0; bottom:0; z-index:9; max-width:560px; margin:0 auto;
+    background:#fff; color:var(--ink); border-radius:26px 26px 0 0;
+    padding:clamp(10px,2.4vw,15px) clamp(14px,4.5vw,24px) calc(clamp(14px,3vw,20px) + env(safe-area-inset-bottom));
+    box-shadow:0 -14px 46px rgba(0,0,0,.45);
+    transform:translateY(115%); transition:transform .32s cubic-bezier(.3,1.1,.5,1);
+    pointer-events:none; max-height:84%; overflow:auto;
   }
   .sheet.show { transform:translateY(0); pointer-events:auto; }
+  .handle { width:46px; height:5px; border-radius:99px; background:#e6e1f6; margin:0 auto clamp(8px,2vw,12px); }
   .ctx {
-    text-align:center; font-size:13.5px; font-weight:600; line-height:1.35;
-    border-radius:14px; padding:9px 12px; margin-bottom:11px; border:2px solid;
+    text-align:center; font-size:clamp(12.5px,3.4vw,14px); font-weight:600; line-height:1.36;
+    border-radius:14px; padding:clamp(8px,2vw,11px) clamp(10px,3vw,14px); margin-bottom:clamp(8px,2vw,12px); border:2px solid;
   }
   .ctx b { font-weight:800; }
   .ctx.green { background:#e9fbef; color:#15803d; border-color:#86efac; }
@@ -92,18 +105,19 @@
   .ctx.amber { background:#fff8ec; color:#b45309; border-color:#fcd34d; }
   .ctx.cyan { background:#ecfdff; color:#0e7490; border-color:#a5f3fc; }
   @keyframes ctxBuzz { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
-  .concept { text-align:center; font-size:11.5px; font-weight:700; letter-spacing:.07em; color:var(--violet); text-transform:uppercase; opacity:.85; }
-  .prompt { text-align:center; font-size:18px; line-height:1.35; margin-top:3px; }
-  .prompt b { color:var(--violet); }
-  .prompt .ex { display:inline-block; font-size:24px; font-weight:700; color:var(--violet); }
-  .choices { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:13px; }
+  .concept { text-align:center; font-size:clamp(10.5px,2.8vw,12px); font-weight:700; letter-spacing:.07em; color:var(--violet); text-transform:uppercase; opacity:.85; }
+  .prompt { text-align:center; font-size:clamp(16px,4.4vw,19px); line-height:1.36; margin-top:4px; }
+  .prompt b { color:var(--violet); font-weight:800; }
+  .prompt .ex { display:inline-block; font-size:clamp(20px,6vw,27px); font-weight:800; color:var(--violet); letter-spacing:.01em; }
+  .choices { display:grid; grid-template-columns:1fr 1fr; gap:clamp(8px,2.2vw,11px); margin-top:clamp(11px,2.6vw,15px); }
   .choices.one { grid-template-columns:1fr; }
   .choices button {
-    font-family:inherit; font-size:21px; font-weight:700; padding:14px 12px; border-radius:15px; border:none;
+    font-family:inherit; font-size:clamp(18px,5vw,22px); font-weight:700; min-height:clamp(50px,13vw,60px);
+    padding:clamp(10px,2.4vw,14px) 10px; border-radius:16px; border:none;
     touch-action:manipulation; background:#f1ecfe; color:var(--ink); cursor:pointer;
-    box-shadow:0 4px 0 #cabdf2; transition:transform .07s, box-shadow .07s, background .15s; line-height:1.2;
+    box-shadow:0 4px 0 #cabdf2; transition:transform .07s, box-shadow .07s, background .15s; line-height:1.15;
   }
-  .choices.one button { font-size:16px; }
+  .choices.one button { font-size:clamp(15px,4vw,17px); min-height:clamp(46px,12vw,56px); }
   .choices button:active { transform:translateY(3px); box-shadow:0 1px 0 #cabdf2; }
   .choices button.right { background:var(--green); color:#fff; box-shadow:0 4px 0 var(--green-d); animation:rightPulse .45s ease; }
   @keyframes rightPulse { 0%{transform:scale(1)} 40%{transform:scale(1.07)} 100%{transform:scale(1)} }
@@ -111,7 +125,7 @@
   .choices button.reveal { outline:3px dashed var(--green); outline-offset:2px; animation:revealGlow 1s ease infinite; }
   @keyframes revealGlow { 0%,100%{outline-color:var(--green)} 50%{outline-color:#86efac} }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
-  .feedback { text-align:center; min-height:18px; margin-top:10px; font-weight:600; font-size:13.5px; line-height:1.35; }
+  .feedback { text-align:center; min-height:18px; margin-top:clamp(8px,2vw,11px); font-weight:600; font-size:clamp(12.5px,3.4vw,14px); line-height:1.36; }
   .feedback.good { color:var(--green-d); } .feedback.bad { color:var(--red); }
   .cancel {
     display:block; margin:11px auto 0; font-family:inherit; font-size:13px; font-weight:700;
@@ -123,14 +137,14 @@
   .overlay { position:absolute; inset:0; z-index:12; display:none; align-items:center; justify-content:center; background:rgba(20,12,50,.74); padding:20px; }
   .overlay.show { display:flex; animation:fadeIn .3s ease; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
-  .card { background:#fff; color:var(--ink); border-radius:26px; padding:26px 28px; text-align:center; max-width:340px; max-height:92%; overflow:auto; animation:cardIn .45s cubic-bezier(.3,1.5,.5,1); }
+  .card { background:#fff; color:var(--ink); border-radius:26px; padding:clamp(20px,5vw,28px) clamp(22px,5.5vw,30px); text-align:center; max-width:min(92%,360px); max-height:92%; overflow:auto; animation:cardIn .45s cubic-bezier(.3,1.5,.5,1); }
   @keyframes cardIn { 0%{transform:scale(.7); opacity:0} 100%{transform:scale(1); opacity:1} }
   .card .trophy { font-size:58px; line-height:1; animation:trophyBounce 1.4s ease-in-out infinite; }
   @keyframes trophyBounce { 0%,100%{transform:translateY(0) rotate(-5deg)} 50%{transform:translateY(-10px) rotate(5deg)} }
-  .card h2 { font-size:26px; margin-top:6px; color:var(--violet); }
+  .card h2 { font-size:clamp(22px,6vw,26px); margin-top:6px; color:var(--violet); }
   .card p { color:var(--muted); margin-top:6px; font-size:14px; line-height:1.4; }
-  .card .big { font-size:62px; color:var(--violet); font-weight:700; line-height:1; margin:8px 0 2px; }
-  .card .big span { font-size:24px; color:var(--amber); }
+  .card .big { font-size:clamp(48px,15vw,64px); color:var(--violet); font-weight:700; line-height:1; margin:8px 0 2px; }
+  .card .big span { font-size:clamp(20px,6vw,24px); color:var(--amber); }
   .card button { margin-top:18px; font-family:inherit; font-size:18px; font-weight:700; padding:13px 30px; border:none; border-radius:15px; background:var(--violet); color:#fff; cursor:pointer; box-shadow:0 5px 0 var(--violet-d); }
   .card button:active { transform:translateY(4px); box-shadow:0 1px 0 var(--violet-d); }
 </style>
@@ -143,17 +157,26 @@
       <span class="pips" id="pips"></span>
     </div>
     <div class="spacer"></div>
-    <div class="chip lvlchip zero" id="lvlChip">💎 +0</div>
-    <div class="chip scorechip" id="scoreChip">⭐ <b id="scoreVal">0</b></div>
-    <button class="mute" id="muteBtn" title="Sound">🔊</button>
+    <div class="stats">
+      <div class="chip retrychip" id="retryChip" title="Level retries">🔁 <b id="retryVal">0</b></div>
+      <div class="chip lvlchip zero" id="lvlChip">💎 +0</div>
+      <div class="chip scorechip" id="scoreChip">⭐ <b id="scoreVal">0</b></div>
+      <button class="mute" id="muteBtn" title="Sound">🔊</button>
+    </div>
+  </div>
+
+  <div class="legend" id="help">
+    <span class="key"><b class="g">💎</b>&nbsp;→ hero</span>
+    <span class="key"><b class="r">🔥 🪨</b>&nbsp;→ drain</span>
+    <span class="key">tap a pin · answer · pull</span>
   </div>
 
   <div class="scene" id="scene">
     <canvas id="cv"></canvas>
-    <div class="help" id="help"></div>
     <div class="banner" id="banner"></div>
 
     <div class="sheet" id="sheet">
+      <div class="handle"></div>
       <div class="ctx" id="qCtx"></div>
       <div class="concept" id="qConcept">Variables</div>
       <div class="prompt" id="qPrompt"></div>
@@ -186,7 +209,9 @@
    *                  atb:victory {power:<number>} after 3 levels.
    * ============================================================= */
 
-  var GEM = 12, FIRST_TRY = 3, CLEAR_BONUS = 10;
+  /* Scoring tuned so a full clear banks ~225-310 (matches the other two games).
+     6 gems x25 + 17 first-try x5 + 3 clears x25 = 310 on a flawless run. */
+  var GEM = 25, FIRST_TRY = 5, CLEAR_BONUS = 25;
   var PAL = { violet:"#7c3aed", violetD:"#6d28d9", violetL:"#a78bfa", pink:"#ec4899",
               cyan:"#06b6d4", amber:"#f59e0b", green:"#22c55e", greenD:"#15803d", red:"#ef4444" };
 
@@ -263,6 +288,8 @@
   var scoreChip = document.getElementById("scoreChip");
   var scoreVal = document.getElementById("scoreVal");
   var muteBtn = document.getElementById("muteBtn");
+  var retryChip = document.getElementById("retryChip");
+  var retryVal = document.getElementById("retryVal");
 
   /* ---------- audio (tiny synth, no external files) ---------- */
   var AC = null, muted = false;
@@ -304,18 +331,25 @@
     if (!S || !S.stations) return;
     var n = S.stations.length;
     L.shaftX = W * 0.5;
-    L.shaftW = clamp(W * 0.07, 30, 56);
-    L.stubLen = clamp(W * 0.085, 30, 78);
-    L.boxW = clamp(W * 0.15, 50, 86);
-    var rowH = clamp(H * 0.07, 38, 60);
-    L.boxH = clamp(rowH * 0.78, 34, 50);
-    L.heroH = clamp(H * 0.16, 86, 150);
+    L.shaftW = clamp(W * 0.06, 26, 52);
+    L.stubLen = clamp(W * 0.075, 22, 72);
+    L.boxW = clamp(W * 0.16, 46, 86);
+    L.heroH = clamp(H * 0.15, 72, 148);
     L.heroX = W * 0.5;
-    L.heroY = H - L.heroH * 0.55;
+    L.heroY = H - L.heroH * 0.52;
     L.heroCatchY = L.heroY - L.heroH * 0.30;
-    L.topY = clamp(H * 0.10, 40, 96);
-    var botY = L.heroY - L.heroH * 0.55 - 8;
+    L.topY = clamp(H * 0.08, 28, 92);
+    var botY = L.heroY - L.heroH * 0.55 - 10;
     var span = Math.max(1, botY - L.topY);
+    // Derive a per-row gap from the available span + station count, then size the
+    // chambers to FIT inside that gap. Guarantees no station/hit-zone overlap even
+    // with 8 stations on a short frame; chambers stay as large as the gap allows.
+    var rowGap = n > 1 ? span / (n - 1) : span;
+    L.rowGap = rowGap;
+    L.boxH = clamp(Math.min(rowGap * 0.62, H * 0.072), 20, 50);
+    L.showChips = rowGap >= (L.boxH + 26);   // only float the text destination chips when rows have clear room
+    var hitH = Math.min(rowGap - 2, L.boxH + 22);
+    if (hitH < L.boxH) hitH = L.boxH;
     for (var i = 0; i < n; i++) {
       var st = S.stations[i];
       st.y = n > 1 ? L.topY + span * (i / (n - 1)) : L.topY + span * 0.5;
@@ -323,8 +357,8 @@
       st.boxX = st.shaftEdgeX + st.side * (L.stubLen + L.boxW / 2);
       st.boxR = { x: st.boxX - L.boxW / 2, y: st.y - L.boxH / 2, w: L.boxW, h: L.boxH };
       st.pinR = { x: st.shaftEdgeX + (st.side < 0 ? -38 : 8), y: st.y - 22, w: 46, h: 44 };
-      st.hitR = { x: Math.min(st.boxR.x, st.shaftEdgeX) - 6, y: st.y - L.boxH / 2 - 8,
-                  w: Math.abs(st.boxX - st.shaftEdgeX) + L.boxW / 2 + 14, h: L.boxH + 16 };
+      st.hitR = { x: Math.min(st.boxR.x, st.shaftEdgeX) - 8, y: st.y - hitH / 2,
+                  w: Math.abs(st.boxX - st.shaftEdgeX) + L.boxW / 2 + 16, h: hitH };
     }
   }
 
@@ -468,7 +502,7 @@
       ctx.beginPath(); ctx.moveTo(st.boxX - 11, yy - 4); ctx.lineTo(st.boxX, yy + 3); ctx.lineTo(st.boxX + 11, yy - 4); ctx.stroke();
     }
     emoji(st.open ? "🌀" : "🚰", st.boxX, st.y - r.h * 0.02, L.boxH * 0.5);
-    label(st.open ? "OPEN" : "DRAIN", st.boxX, r.y + r.h + 9, 10, st.open ? "#a5f3fc" : "rgba(255,255,255,.7)");
+    if (L.showChips) label(st.open ? "OPEN" : "DRAIN", st.boxX, r.y + r.h + 9, 10, st.open ? "#a5f3fc" : "rgba(255,255,255,.72)");
   }
 
   function drawPin(st) {
@@ -494,18 +528,19 @@
   function previewPath(st) {
     var dest = destOf(st), pts = buildPath(st, dest);
     var danger = st.type === "hazard" && dest.type === "hero";
-    var safeHaz = st.type === "hazard" && dest.type === "drain";
     var color, alpha, dash;
-    if (st.type === "gem") { color = dest.type === "hero" ? PAL.green : "#94a3b8"; alpha = dest.type === "hero" ? 0.22 : 0.16; dash = [2, 6]; }
-    else if (danger) { color = PAL.red; alpha = 0.5 + Math.sin(now1 / 160) * 0.18; dash = [7, 6]; }
-    else { color = PAL.green; alpha = 0.22; dash = [2, 7]; } // safe hazard
-    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = danger ? 3.4 : 2.2;
+    if (st.type === "gem") { color = dest.type === "hero" ? PAL.green : "#94a3b8"; alpha = dest.type === "hero" ? 0.34 : 0.2; dash = [2, 6]; }
+    else if (danger) { color = PAL.red; alpha = 0.58 + Math.sin(now1 / 160) * 0.2; dash = [7, 6]; }
+    else { color = PAL.green; alpha = 0.32; dash = [2, 7]; } // safe hazard
+    ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.lineWidth = danger ? 3.6 : 2.4;
     ctx.setLineDash(dash); ctx.lineDashOffset = -(now1 / (danger ? 22 : 60)) % 1000; ctx.lineJoin = "round"; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke();
     ctx.setLineDash([]); ctx.restore();
-    // destination chip near chamber
-    var chip = previewChip(st, dest);
-    drawChip(st.boxX, st.boxR.y - 13, chip.txt, chip.bg, chip.fg, danger);
+    // destination chip near chamber — danger warning always shows; the rest only when rows have room
+    if (L.showChips || danger) {
+      var chip = previewChip(st, dest);
+      drawChip(st.boxX, st.boxR.y - 13, chip.txt, chip.bg, chip.fg, danger);
+    }
   }
   function previewChip(st, dest) {
     if (st.type === "gem") return dest.type === "hero"
@@ -517,10 +552,12 @@
   }
   function drawChip(x, y, txt, bg, fg, pulse) {
     ctx.font = "700 12px 'Fredoka',system-ui,sans-serif";
-    var w = ctx.measureText(txt).width + 16, h = 19;
+    var w = ctx.measureText(txt).width + 18, h = 20;
     var sc = pulse ? 1 + Math.sin(now1 / 180) * 0.06 : 1;
     ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc);
+    ctx.fillStyle = "rgba(8,5,24,.28)"; rr(-w / 2, -h / 2 + 1.5, w, h, h / 2); ctx.fill();
     ctx.fillStyle = bg; rr(-w / 2, -h / 2, w, h, h / 2); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.4)"; ctx.lineWidth = 1; rr(-w / 2, -h / 2, w, h, h / 2); ctx.stroke();
     ctx.fillStyle = fg; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, 0, 0.5);
     ctx.restore();
   }
@@ -637,7 +674,7 @@
   var S = null;
   function freshState() {
     return { committed: 0, shownScore: 0, level: 0, stations: [], phase: "intro",
-      levelGem: 0, levelBonus: 0, resolved: 0, selected: null, q: null,
+      levelGem: 0, levelBonus: 0, resolved: 0, selected: null, q: null, retries: 0,
       hero: { mood: "idle", jump: 0 }, shake: 0, redFlash: 0, lastGen: [-1, -1, -1],
       clearedFlags: [false, false, false] };
   }
@@ -681,7 +718,6 @@
     S.levelGem = 0; S.levelBonus = 0; S.resolved = 0; S.selected = null; S.q = null;
     S.phase = "intro"; S.hero.mood = "idle"; tokens.length = 0;
     lvlText.textContent = def.name;
-    helpEl.innerHTML = "💎 <b>→ hero</b> &nbsp;•&nbsp; 🔥🪨 <b>→ drain</b> &nbsp;•&nbsp; tap a pin, answer, pull!";
     setLevelChip(); setPips(); layout();
     showBanner(retry ? "Try again!" : def.name, def.intro, retry ? "bad" : "good");
     if (retry) { S.hero.mood = "idle"; }
@@ -715,6 +751,7 @@
 
   function resetLevel() {
     S.phase = "resetting";
+    S.retries++; retryVal.textContent = S.retries;
     S.hero.mood = "hurt"; S.shake = 16; S.redFlash = 1; sHit();
     setTimeout(function () { startLevel(S.level, true); }, 1000);
   }
@@ -796,10 +833,36 @@
   }
 
   function makeQuestion(level) {
-    var q = (level === 0) ? qVar() : (level === 1) ? qEval() : qHard();
+    // Difficulty scales by level, and every level MIXES variable-identification with
+    // expression-evaluation: L1 = variables + simple evaluation, L2 = evaluation (+squares),
+    // L3 = order-of-ops / combine-like-terms / squares.
+    var q;
+    if (level === 0) q = (Math.random() < 0.5) ? qEvalEasy() : qVar();
+    else if (level === 1) q = (Math.random() < 0.85) ? qEval() : qVar();
+    else q = qHard();
     q.tries = 0; return q;
   }
   function diffGen(level, fn, count) { var g; var guard = 0; do { g = (Math.random() * count) | 0; } while (g === S.lastGen[level] && guard++ < 8); S.lastGen[level] = g; return g; }
+
+  /* Easy expression-evaluation for Level 1 (single step, small numbers). */
+  function qEvalEasy() {
+    var g = diffGen(0, null, 4), L1 = pick(LETTERS), v, b, c, ans;
+    if (g === 0) { v = rint(2, 9); b = rint(2, 9); ans = v + b;
+      return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " + " + b + "</span>?", choices: numChoices(ans),
+        hint1: "Put <b>" + v + "</b> in for " + L1 + ", then add " + b + ".", hint2: v + " + " + b + " = ?" };
+    }
+    if (g === 1) { v = rint(5, 12); b = rint(2, v - 1); ans = v - b;
+      return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " − " + b + "</span>?", choices: numChoices(ans),
+        hint1: "Put <b>" + v + "</b> in for " + L1 + ", then subtract " + b + ".", hint2: v + " − " + b + " = ?" };
+    }
+    if (g === 2) { v = rint(2, 9); ans = 2 * v;
+      return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " + " + L1 + "</span>?", choices: numChoices(ans),
+        hint1: L1 + " + " + L1 + " is <b>two</b> " + v + "'s.", hint2: v + " + " + v + " = ?" };
+    }
+    c = rint(2, 3); v = rint(2, 6); ans = c * v;
+    return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + "</span>?", choices: numChoices(ans),
+      hint1: "<b>" + c + L1 + "</b> means " + c + " × " + L1 + ".", hint2: c + " × " + v + " = ?" };
+  }
 
   function qVar() {
     var g = diffGen(0, null, 5), L1 = pick(LETTERS), c;
@@ -845,7 +908,7 @@
   }
 
   function qEval() {
-    var g = diffGen(1, null, 6), L1 = pick(LETTERS), v, c, b, ans;
+    var g = diffGen(1, null, 8), L1 = pick(LETTERS), v, c, b, ans;
     if (g === 0) { c = rint(2, 5); v = rint(2, 9); ans = c * v;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + "</span>?", choices: numChoices(ans),
         hint1: c + L1 + " means <b>" + c + " × " + L1 + "</b>. Put " + v + " in for " + L1 + ".", hint2: c + " × " + v + " = ?" };
@@ -866,13 +929,21 @@
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " + " + L1 + "</span>?", choices: numChoices(ans),
         hint1: L1 + " + " + L1 + " is <b>two groups</b> of " + v + ".", hint2: v + " + " + v + " = ?" };
     }
+    if (g === 6) { v = rint(2, 7); ans = v * v;
+      return { concept: "Squares", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + "²</span>?", choices: numChoices(ans),
+        hint1: "<b>" + L1 + "²</b> means " + L1 + " × " + L1 + ".", hint2: v + " × " + v + " = ?" };
+    }
+    if (g === 7) { c = rint(2, 3); v = rint(2, 6); b = rint(1, 5); ans = c * v + b;
+      return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + " + " + b + "</span>?", choices: numChoices(ans),
+        hint1: "Multiply first: " + c + " × " + v + ", then add " + b + ".", hint2: (c * v) + " + " + b + " = ?" };
+    }
     c = rint(2, 4); v = rint(2, 8); ans = c * v;
     return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + " · " + L1 + "</span>?", choices: numChoices(ans),
       hint1: c + " · " + L1 + " means " + c + " × " + L1 + ".", hint2: c + " × " + v + " = ?" };
   }
 
   function qHard() {
-    var g = diffGen(2, null, 6), L1 = pick(LETTERS), c, v, b, ans, c1, c2, s;
+    var g = diffGen(2, null, 7), L1 = pick(LETTERS), c, v, b, ans, c1, c2, s;
     if (g === 0) { c = rint(2, 4); v = rint(2, 8); b = rint(2, 9); ans = c * v + b;
       return { concept: "Evaluate (order of ops)", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + " + " + b + "</span>?", choices: numChoices(ans),
         hint1: "Do <b>×</b> before <b>+</b>: first " + c + " × " + v + ", then add " + b + ".", hint2: c + "×" + v + " = " + (c * v) + ", then + " + b + " = ?" };
@@ -894,6 +965,10 @@
     if (g === 4) { c1 = rint(2, 3); c2 = rint(2, 3); v = rint(2, 6); ans = (c1 + c2) * v;
       return { concept: "Combine, then evaluate", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c1 + L1 + " + " + c2 + L1 + "</span>?", choices: numChoices(ans),
         hint1: "First combine: " + c1 + L1 + " + " + c2 + L1 + " = " + (c1 + c2) + L1 + ". Then put in " + v + ".", hint2: (c1 + c2) + " × " + v + " = ?" };
+    }
+    if (g === 6) { v = rint(4, 9); ans = v * v;
+      return { concept: "Squares", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + "²</span>?", choices: numChoices(ans),
+        hint1: "<b>" + L1 + "²</b> means " + L1 + " × " + L1 + " (not " + L1 + " × 2).", hint2: v + " × " + v + " = ?" };
     }
     c = rint(2, 3); v = rint(2, 6); b = rint(2, 8); ans = c * v + c * b;  // c(v+b) flavour
     return { concept: "Evaluate (order of ops)", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + "(" + L1 + " + " + b + ")</span>?", choices: numChoices(ans),
@@ -1035,7 +1110,7 @@
   function initGame() {
     S = freshState();
     winEl.classList.remove("show");
-    setScore(0, false); setLevelChip();
+    setScore(0, false); setLevelChip(); retryVal.textContent = "0";
     postParent({ type: "atb:reset" });
     startLevel(0, false);
   }
