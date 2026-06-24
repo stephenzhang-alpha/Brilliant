@@ -18,6 +18,7 @@ export function TowerPage() {
   const gatesUnlocked = useOverallStore((s) => s.gatesUnlocked);
 
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const bankedRef = useRef(false); // dedup: only bank a victory once per run
   const [result, setResult] = useState<number | null>(null);
 
   const src = `${import.meta.env.BASE_URL}algebra-tower-battler.html`;
@@ -29,12 +30,21 @@ export function TowerPage() {
       if (!data || typeof data !== 'object') return;
 
       if (data.type === 'atb:height' && typeof data.height === 'number' && frameRef.current) {
-        frameRef.current.style.height = `${Math.max(560, data.height + 6)}px`;
+        // Only resize on a meaningful change (no perpetual +N) to avoid a
+        // resize feedback loop with the iframe's ResizeObserver.
+        const h = Math.max(560, Math.round(data.height));
+        if (Math.abs(h - frameRef.current.clientHeight) > 2) {
+          frameRef.current.style.height = `${h}px`;
+        }
       } else if (data.type === 'atb:victory' && typeof data.power === 'number') {
-        // Defeating the Dragon contributes the hero's final power to the total.
+        // Defeating the Dragon contributes the hero's final power — but only once
+        // per run (guards against duplicate victory messages double-banking).
+        if (bankedRef.current) return;
+        bankedRef.current = true;
         add(data.power, 'tower');
         setResult(data.power);
       } else if (data.type === 'atb:reset') {
+        bankedRef.current = false;
         setResult(null);
       }
     };

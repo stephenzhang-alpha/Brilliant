@@ -23,7 +23,7 @@ body{
   -webkit-font-smoothing:antialiased; overflow-x:hidden;
 }
 .title,.hp .val,.card h1,.panel h2,.interaction .kicker,.choice{font-family:var(--fun)}
-.app{max-width:1180px;margin:0 auto;padding:16px;min-height:100%}
+.app{max-width:1180px;margin:0 auto;padding:16px}
 header.bar{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   background:linear-gradient(90deg,var(--panel),var(--panel2));
@@ -264,6 +264,7 @@ const initialState = () => ({
   gatesSolved: {},        // gateLevel -> true
   status: "playing",      // playing | gameover | victory
   pending: null,          // active interaction context
+  resolving: false,       // guards against double-tap re-entrancy during the win animation
   log: [],
 });
 let S = initialState();
@@ -461,8 +462,10 @@ function advanceAfterClear(){
 
 /* Combat resolution: enforce H > E, then reassign heroPower = heroPower + E. */
 function resolveBattle(room, E){
+  if (S.resolving || S.cleared[room.id]) return; // ignore double-taps during the win animation
   const H = S.heroPower;
   if (H > E){
+    S.resolving = true;
     sfx.hit();
     const sel = room.kind === "boss" ? "[data-roof]" : `[data-room="${room.id}"]`;
     const cell = towerEl.querySelector(sel);
@@ -471,7 +474,9 @@ function resolveBattle(room, E){
     S.cleared[room.id] = true;
     setHeroPower(H + E);          // heroPower = heroPower + enemyPower
     S.pending = null;
+    showInteraction("");         // remove the Confirm button so it can't be re-clicked
     setTimeout(() => {
+      S.resolving = false;
       if (room.kind === "boss") return victory();
       advanceAfterClear(); renderAll(); renderIdle();
     }, 480);
@@ -495,6 +500,8 @@ function renderItem(room){
       <button class="btn ghost" id="leaveChest">Leave</button>
     </div>`);
   el("openChest").addEventListener("click", () => {
+    if (S.resolving || S.cleared[room.id]) return; // ignore double-taps
+    S.resolving = true;
     sfx.chime();
     const cell = towerEl.querySelector(`[data-room="${room.id}"]`);
     if (cell) cell.classList.add("defeat");
@@ -502,7 +509,8 @@ function renderItem(room){
     S.cleared[room.id] = true;
     setHeroPower(H + room.add);
     S.pending = null;
-    setTimeout(() => { advanceAfterClear(); renderAll(); renderIdle(); }, 460);
+    showInteraction("");
+    setTimeout(() => { S.resolving = false; advanceAfterClear(); renderAll(); renderIdle(); }, 460);
   });
   el("leaveChest").addEventListener("click", () => { S.pending = null; renderIdle(); });
 }
@@ -524,6 +532,7 @@ function renderGate(lvl){
     btn.addEventListener("click", () => answerGate(lvl, +btn.dataset.val, H, correct, g)));
 }
 function answerGate(lvl, val, H, correct, g){
+  if (S.gatesSolved[lvl]) return; // already unlocked — ignore extra taps
   if (val === correct){
     sfx.chime();
     S.gatesSolved[lvl] = true;
@@ -533,11 +542,12 @@ function answerGate(lvl, val, H, correct, g){
     S.pending = null;
     renderAll(); renderIdle();
   } else {
+    // Wrong key: shake + warn, but no power penalty (keeps the on-screen
+    // equation truthful and can't softlock the hero one tap from solving).
     sfx.buzz(); shakeScreen();
-    logAdd(`Gate ${lvl}: tried x = ${val} ✗ (−2 power)`, "bad");
-    setHeroPower(S.heroPower - 2);
+    logAdd(`Gate ${lvl}: tried x = ${val} ✗`, "bad");
     const w = el("gateWarn");
-    if (w && S.status === "playing"){ w.style.display = "block"; w.textContent = `x = ${val} does not balance the equation. −2 power!`; }
+    if (w){ w.style.display = "block"; w.textContent = `x = ${val} doesn't balance the equation — try again!`; }
   }
 }
 
@@ -598,7 +608,11 @@ function postParent(msg){
   catch(_) {}
 }
 function postHeight(){
-  postParent({ type: "atb:height", height: Math.ceil(document.documentElement.scrollHeight) });
+  // Measure the content container (#app), not documentElement — the latter is
+  // forced to the frame height and would feed back into an ever-growing frame.
+  const app = document.getElementById("app");
+  const h = app ? app.scrollHeight : document.documentElement.scrollHeight;
+  postParent({ type: "atb:height", height: Math.ceil(h) });
 }
 
 /* --------------------------------------------------------- CONFETTI ------ */
