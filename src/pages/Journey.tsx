@@ -162,7 +162,7 @@ export function JourneyPage() {
           <span className="text-xl mr-0.5 sm:mr-1 animate-bob" aria-hidden>🦖</span>
           {tab('dino', 'Dino')}
           {tab('gates', 'Gates', !gatesUnlocked)}
-          {tab('tower', 'Tower', !towerUnlocked)}
+          {tab('tower', 'Pull the Pin', !towerUnlocked)}
           <Link
             to="/leaderboard"
             className="text-xs sm:text-sm rounded-full px-2.5 py-1 font-display font-semibold text-white/85 hover:bg-white/20 whitespace-nowrap"
@@ -235,7 +235,7 @@ export function JourneyPage() {
                 unlock('tower');
               }}
               onNext={() => scrollTo('tower')}
-              nextLabel="Next → Tower ↓"
+              nextLabel="Next → Pull the Pin ↓"
             />
           </div>
         ) : (
@@ -249,7 +249,7 @@ export function JourneyPage() {
         )}
       </section>
 
-      {/* Stage 3 — Algebra Tower (practice: equations & inequalities) */}
+      {/* Stage 3 — Pull the Pin (practice: variables & evaluating expressions) */}
       <section
         ref={towerRef}
         data-section="tower"
@@ -261,7 +261,7 @@ export function JourneyPage() {
             <iframe
               ref={frameRef}
               src={towerSrc}
-              title="Algebra Tower Battler"
+              title="Pull the Pin"
               className="w-full block rounded-2xl border-2 border-white/15 shadow-2xl bg-[#1b1640]"
               style={{ height: 'calc(100dvh - 6.5rem)' }}
             />
@@ -269,10 +269,10 @@ export function JourneyPage() {
               <div className="absolute inset-0 flex items-center justify-center px-4">
                 <div className="bg-white rounded-2xl p-6 text-center shadow-2xl max-w-sm">
                   <p className="text-3xl">🏆</p>
-                  <p className="font-display font-extrabold text-xl mt-1">Tower conquered!</p>
+                  <p className="font-display font-extrabold text-xl mt-1">Pull the Pin cleared!</p>
                   <p className="text-text-muted text-sm mt-1">
                     You banked <span className="font-bold text-success">+{towerResult.toLocaleString()}</span>{' '}
-                    hero power into your total (now{' '}
+                    points into your total (now{' '}
                     <span className="font-bold text-primary">{overall.toLocaleString()}</span>).
                   </p>
                   <button
@@ -287,9 +287,9 @@ export function JourneyPage() {
           </div>
         ) : (
           <LockedLesson
-            lessonLabel="Stage 3 · Equations & Inequalities"
-            title="Algebra Tower is locked"
-            requirement="Finish the Gate Runner above to unlock the Tower climb."
+            lessonLabel="Stage 3 · Variables & Expressions"
+            title="Pull the Pin is locked"
+            requirement="Finish the Gate Runner above to unlock the Pull the Pin puzzle."
             ctaLabel={gatesUnlocked ? '↑ Back to Gate Runner' : '↑ Back to Dino Runner'}
             onCta={() => scrollTo(gatesUnlocked ? 'gates' : 'dino')}
           />

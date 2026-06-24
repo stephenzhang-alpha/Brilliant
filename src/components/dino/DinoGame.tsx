@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { DinoGame as Engine, GameStatus } from '../../game/dino/engine';
-import { WORLD_WIDTH, WORLD_HEIGHT, CHALLENGE_TARGET } from '../../game/dino/constants';
+import { WORLD_WIDTH, WORLD_HEIGHT } from '../../game/dino/constants';
 import { useAuthStore } from '../../stores/authStore';
 import { useScoresStore, GameUser } from '../../stores/scoresStore';
 
@@ -63,10 +63,54 @@ export interface DeathOffer {
   onNext: () => void;
 }
 
-/** Steps of the one-time "introduce variables" onboarding. null = normal play. */
-type TutorialStep = 'play' | 'welcome' | 'running' | 'intro' | 'challenge' | null;
+/**
+ * One-time onboarding that introduces variables using the live score as the
+ * concrete example:
+ *   • 'lesson' — the dino is already running (no obstacles); explain that the
+ *     live score & high score ARE variables (their values change).
+ *   • 'quiz'   — a multiple-choice check; the player must answer correctly to
+ *     unlock the real game.
+ *   • null     — lesson done (or already seen): play normally, with obstacles.
+ */
+type TutorialStep = 'lesson' | 'quiz' | null;
 
 const TUTORIAL_SEEN_KEY = 'dino_var_tutorial_seen';
+
+interface QuizOption {
+  id: string;
+  label: string;
+  /** A short tag shown under the label. */
+  hint: string;
+  correct: boolean;
+  /** Gentle, encouraging re-explanation shown when this wrong option is picked. */
+  feedback?: string;
+}
+
+const VARIABLE_QUESTION = 'Which of these is a variable?';
+const VARIABLE_OPTIONS: QuizOption[] = [
+  {
+    id: 'score',
+    label: 'Your score',
+    hint: 'it keeps changing as you run',
+    correct: true,
+  },
+  {
+    id: 'seven',
+    label: 'The number 7',
+    hint: 'it is always exactly 7',
+    correct: false,
+    feedback:
+      'Close! 7 is always 7 — its value never changes, so it is a constant, not a variable. A variable is a value that CAN change… like your score climbing right now.',
+  },
+  {
+    id: 'red',
+    label: 'The color red',
+    hint: 'a color, not a changing amount',
+    correct: false,
+    feedback:
+      'Not quite! A color is not an amount that changes. A variable is a quantity whose value can change — like your score going up as you play.',
+  },
+];
 
 interface DinoGameProps {
   /**
@@ -88,13 +132,15 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
   const [isNewBest, setIsNewBest] = useState(false);
   const [offer, setOffer] = useState<DeathOffer | null>(null);
   const [tutorialStep, setTutorialStep] = useState<TutorialStep>(() =>
-    localStorage.getItem(TUTORIAL_SEEN_KEY) ? null : 'play',
+    localStorage.getItem(TUTORIAL_SEEN_KEY) ? null : 'lesson',
   );
+  // Live mirror of the two example variables, polled while the lesson is up.
   const [liveScore, setLiveScore] = useState(0);
-  // Interactive variables beat: the score the player jumped at (success), and a
-  // gentle "not yet" hint shown while they wait for s to reach the target.
-  const [challengeScore, setChallengeScore] = useState<number | null>(null);
-  const [challengeHint, setChallengeHint] = useState(false);
+  const [liveHigh, setLiveHigh] = useState(0);
+  // Quiz state: the last wrong option (for retry feedback) and whether the
+  // player has answered correctly (celebration + "play for real" gate).
+  const [wrongPick, setWrongPick] = useState<string | null>(null);
+  const [quizDone, setQuizDone] = useState(false);
 
   const best = useScoresStore((s) => s.best);
 
@@ -109,16 +155,6 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     tutorialStepRef.current = tutorialStep;
     activeRef.current = active;
   });
-
-  // Tutorial timers (run-a-bit delay + live score ticker).
-  const introTimerRef = useRef<number | null>(null);
-  const liveTimerRef = useRef<number | null>(null);
-  const clearTutorialTimers = useCallback(() => {
-    if (introTimerRef.current) window.clearTimeout(introTimerRef.current);
-    if (liveTimerRef.current) window.clearInterval(liveTimerRef.current);
-    introTimerRef.current = null;
-    liveTimerRef.current = null;
-  }, []);
 
   // Keep the canvas HI counter in sync with the loaded personal best.
   useEffect(() => {
@@ -172,6 +208,15 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     };
     raf = requestAnimationFrame(loop);
 
+    // New players: kick off the variables free-run immediately so the dino is
+    // already running (animated, world scrolling, score ticking) with NO
+    // obstacles while the lesson plays. Obstacles only switch on once the quiz
+    // is answered correctly (beginRealGame). Returning players keep today's
+    // "press to start" behaviour, so the engine is left in its 'ready' state.
+    if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) {
+      engine.startTutorial();
+    }
+
     const isTyping = () => {
       const el = document.activeElement;
       return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
@@ -179,9 +224,9 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTyping() || !activeRef.current) return;
-      // During the Play/Welcome steps the buttons drive progression.
-      const ts = tutorialStepRef.current;
-      if (ts === 'play' || ts === 'welcome') return;
+      // During onboarding the dino auto-runs and the panel buttons drive
+      // progression, so keyboard control is ignored until normal play begins.
+      if (tutorialStepRef.current !== null) return;
       if (isJumpEvent(e)) {
         e.preventDefault();
         if (!e.repeat) engine.primary();
@@ -207,12 +252,22 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     };
   }, []);
 
-  useEffect(() => clearTutorialTimers, [clearTutorialTimers]);
+  // Poll the live variable values while the lesson / quiz are on screen so the
+  // panels can show the score (and high score) changing in real time.
+  useEffect(() => {
+    if (tutorialStep === null) return;
+    const id = window.setInterval(() => {
+      const eng = engineRef.current;
+      if (!eng) return;
+      setLiveScore(eng.score);
+      setLiveHigh(eng.highScore);
+    }, 120);
+    return () => window.clearInterval(id);
+  }, [tutorialStep]);
 
   // --- Touch / pointer controls -------------------------------------------
   const onPlayfieldPointerDown = useCallback(() => {
-    const ts = tutorialStepRef.current;
-    if (ts === 'play' || ts === 'welcome') return;
+    if (tutorialStepRef.current !== null) return;
     engineRef.current?.primary();
   }, []);
   const onPlayfieldPointerUp = useCallback(() => {
@@ -224,66 +279,32 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     engineRef.current?.start();
   }, []);
 
-  // --- Variables tutorial flow --------------------------------------------
-  const onPlay = useCallback(() => setTutorialStep('welcome'), []);
-
-  const onWelcomeNext = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engine.obstaclesEnabled = false; // free run, no danger yet
-    engine.highlightScore = false;
-    engine.start();
-    setTutorialStep('running');
-    clearTutorialTimers();
-    // Let the dino run a bit, then introduce variables.
-    introTimerRef.current = window.setTimeout(() => {
-      const eng = engineRef.current;
-      if (eng) eng.highlightScore = true;
-      setTutorialStep('intro');
-      liveTimerRef.current = window.setInterval(() => {
-        setLiveScore(engineRef.current?.score ?? 0);
-      }, 120);
-    }, 2600);
-  }, [clearTutorialTimers]);
-
-  // After the read-only explanation, hand the player an actual task: keep the
-  // dino in the safe free-run state and ask them to jump when the score
-  // variable s reaches the target. The engine reports the result via callback.
-  const onIntroNext = useCallback(() => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    clearTutorialTimers();
-    engine.armChallenge(CHALLENGE_TARGET);
-    setChallengeScore(null);
-    setChallengeHint(false);
-    setLiveScore(0);
-    setTutorialStep('challenge');
-    liveTimerRef.current = window.setInterval(() => {
-      setLiveScore(engineRef.current?.score ?? 0);
-    }, 100);
-  }, [clearTutorialTimers]);
-
-  const onChallengeResult = useCallback((success: boolean, score: number) => {
-    if (!success) {
-      setChallengeHint(true);
-      return;
-    }
-    setChallengeHint(false);
-    setChallengeScore(score);
+  // --- Variables onboarding flow ------------------------------------------
+  const onLessonNext = useCallback(() => {
+    setWrongPick(null);
+    setTutorialStep('quiz');
   }, []);
 
-  // Wire the engine's challenge callback once (the handler is stable).
-  useEffect(() => {
-    const eng = engineRef.current;
-    if (eng) eng.onChallengeResult = onChallengeResult;
-  }, [onChallengeResult]);
-
-  const onChallengeContinue = useCallback(() => {
-    clearTutorialTimers();
-    engineRef.current?.beginRealGame();
+  const onPickOption = useCallback((opt: QuizOption) => {
+    if (!opt.correct) {
+      // No penalty — show a gentle nudge and let them try again.
+      setWrongPick(opt.id);
+      return;
+    }
+    // Correct! Mark the lesson seen, celebrate, then reveal the "play" gate.
+    setWrongPick(null);
+    setQuizDone(true);
     localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
+    engineRef.current?.celebrate();
+  }, []);
+
+  // Enable obstacles + real scoring ONLY after the correct answer.
+  const onFinish = useCallback(() => {
+    engineRef.current?.beginRealGame();
     setTutorialStep(null);
-  }, [clearTutorialTimers]);
+  }, []);
+
+  const wrongOption = wrongPick ? VARIABLE_OPTIONS.find((o) => o.id === wrongPick) : null;
 
   return (
     <div className="w-full">
@@ -308,18 +329,11 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
           </div>
         )}
 
-        {tutorialStep === 'intro' && (
-          <div className="absolute top-2 right-2 pointer-events-none">
-            <div className="bg-warning/90 text-white text-xs font-bold rounded-full px-3 py-1 shadow-lg animate-bounce">
-              variables ↗
-            </div>
-          </div>
-        )}
-
-        {tutorialStep === 'challenge' && challengeScore === null && (
-          <div className="absolute top-2 right-2 pointer-events-none">
-            <div className="bg-primary/90 text-white text-xs font-bold rounded-full px-3 py-1 shadow-lg animate-bounce">
-              jump at s = {CHALLENGE_TARGET} ↗
+        {/* Callout pointing at the live score / high-score HUD during the lesson. */}
+        {tutorialStep !== null && !quizDone && (
+          <div className="absolute right-2 pointer-events-none" style={{ top: '11%' }}>
+            <div className="bg-amber text-[#2a2350] text-[11px] font-extrabold rounded-full px-2.5 py-1 shadow-lg animate-bob flex items-center gap-1">
+              <span aria-hidden>↑</span> these are variables
             </div>
           </div>
         )}
@@ -373,116 +387,106 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
         )}
       </div>
 
-      {/* --- Variables tutorial --- */}
-      {tutorialStep === 'play' && (
-        <div className="mt-4 flex flex-col items-center gap-2">
-          <button
-            onClick={onPlay}
-            className="bg-primary hover:bg-primary-dark text-white font-extrabold text-lg px-10 py-3.5 rounded-2xl shadow-lg transition-colors"
-          >
-            ▶ Play
-          </button>
-          <p className="text-text-muted text-sm">Learn Algebra 1 by playing — let's go!</p>
-        </div>
-      )}
-
-      {tutorialStep === 'welcome' && (
-        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5 text-center">
-          <p className="text-2xl">👋</p>
-          <h3 className="font-extrabold text-lg mt-1">Welcome to Dino Algebra!</h3>
-          <p className="text-text-muted mt-1.5 text-sm max-w-md mx-auto">
-            You're going to learn Algebra 1 by playing. Let's start with the biggest idea in algebra:{' '}
-            <span className="font-semibold text-text">variables</span>.
-          </p>
-          <button
-            onClick={onWelcomeNext}
-            className="mt-4 bg-primary hover:bg-primary-dark text-white font-bold px-7 py-2.5 rounded-xl transition-colors"
-          >
-            Next →
-          </button>
-        </div>
-      )}
-
-      {tutorialStep === 'running' && (
-        <div className="mt-4 text-center text-text-muted text-sm py-2">
-          Off it goes! 🦖 Keep your eye on the <span className="font-semibold text-text">score</span> in the
-          top-right…
-        </div>
-      )}
-
-      {tutorialStep === 'intro' && (
-        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5">
-          <h3 className="font-extrabold text-lg">What's a variable? 🔢</h3>
-          <p className="text-text-muted mt-1.5 text-sm">
-            In algebra, a <span className="font-semibold text-text">variable</span> is a symbol — like{' '}
-            <span className="font-mono font-bold text-primary">x</span> — that stands for a value that can{' '}
-            <span className="italic">change</span>.
-          </p>
-          <p className="text-text-muted mt-2 text-sm">
-            See the <span className="font-semibold text-warning">score</span> and{' '}
-            <span className="font-semibold text-warning">high score</span> in the top-right of the game?
-            Each one is a variable — its value changes as you play. We could call the score{' '}
-            <span className="font-mono font-bold text-primary">s</span> and your high score{' '}
-            <span className="font-mono font-bold text-primary">h</span>.
-          </p>
-          <div className="mt-3 inline-flex items-center gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-1.5 text-sm">
-            <span className="text-text-muted">right now</span>
-            <span className="font-mono font-bold text-text tabular-nums">s = {liveScore}</span>
+      {/* --- Variables onboarding --- */}
+      {tutorialStep === 'lesson' && (
+        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5 animate-fadein">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl" aria-hidden>🔢</span>
+            <h3 className="font-display font-extrabold text-xl text-text">Meet your first variable</h3>
           </div>
-          <div className="mt-4">
-            <button
-              onClick={onIntroNext}
-              className="bg-primary hover:bg-primary-dark text-white font-bold px-7 py-2.5 rounded-xl transition-colors"
-            >
-              Got it — my turn! →
-            </button>
+          <p className="text-text-muted mt-2 text-sm leading-relaxed">
+            A <span className="font-bold text-primary">variable</span> is a quantity whose value can{' '}
+            <span className="italic font-semibold text-text">change</span>. See the{' '}
+            <span className="font-semibold text-amber">score</span> and{' '}
+            <span className="font-semibold text-amber">high score</span> in the top-right corner of the
+            game? Each one is a variable — watch the score climb as your dino runs!
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/25 rounded-xl px-3 py-2">
+              <span className="font-display font-bold text-primary">score</span>
+              <span className="text-text-muted">=</span>
+              <span className="font-mono font-extrabold text-text tabular-nums text-lg">{liveScore}</span>
+              <span className="text-text-muted text-xs">…and counting</span>
+            </div>
+            <div className="inline-flex items-center gap-2 bg-accent/10 border border-accent/25 rounded-xl px-3 py-2">
+              <span className="font-display font-bold text-accent">high score</span>
+              <span className="text-text-muted">=</span>
+              <span className="font-mono font-extrabold text-text tabular-nums text-lg">{liveHigh}</span>
+            </div>
           </div>
+          <p className="text-text-muted mt-3 text-xs">
+            Those changing numbers are exactly what algebra means by a variable.
+          </p>
+          <button
+            onClick={onLessonNext}
+            className="btn-pop mt-4 bg-primary text-white font-display font-bold px-7 py-2.5 rounded-xl"
+          >
+            Got it — quiz me! →
+          </button>
         </div>
       )}
 
-      {tutorialStep === 'challenge' && (
-        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5">
-          {challengeScore === null ? (
+      {tutorialStep === 'quiz' && (
+        <div className="mt-4 bg-surface border border-black/10 rounded-2xl shadow-sm p-5 animate-fadein">
+          {!quizDone ? (
             <>
-              <h3 className="font-extrabold text-lg">Your turn! 🎯</h3>
-              <p className="text-text-muted mt-1.5 text-sm">
-                Keep your eye on the score{' '}
-                <span className="font-mono font-bold text-primary">s</span> in the top-right — it's a
-                variable, so its value keeps changing as you run.{' '}
-                <span className="font-semibold text-text">
-                  Jump the moment it reaches{' '}
-                  <span className="font-mono text-primary">{CHALLENGE_TARGET}</span>!
-                </span>
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <div className="inline-flex items-center gap-2 bg-warning/10 border border-warning/30 rounded-lg px-3 py-1.5 text-sm">
-                  <span className="font-mono font-bold text-text tabular-nums">s = {liveScore}</span>
-                  <span className="text-text-muted">/ {CHALLENGE_TARGET}</span>
-                </div>
-                <span className="text-text-muted text-xs">Press Space or tap to jump</span>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl" aria-hidden>🎯</span>
+                <h3 className="font-display font-extrabold text-xl text-text">{VARIABLE_QUESTION}</h3>
               </div>
-              {challengeHint && (
-                <p className="text-warning text-xs font-semibold mt-2">
-                  Not yet — wait for <span className="font-mono">s</span> to reach {CHALLENGE_TARGET}.
-                  Keep watching it climb!
-                </p>
+              <p className="text-text-muted mt-1 text-sm">
+                Remember: a variable&apos;s value can change. Your score{' '}
+                <span className="font-mono font-bold text-primary">= {liveScore}</span> keeps changing as
+                the dino runs.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {VARIABLE_OPTIONS.map((opt) => {
+                  const isWrongPick = wrongPick === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => onPickOption(opt)}
+                      className={[
+                        'btn-pop text-left rounded-xl border-2 px-4 py-3 transition-colors',
+                        isWrongPick
+                          ? 'border-coral bg-coral/10'
+                          : 'border-black/10 bg-surface-light hover:border-primary hover:bg-primary/5',
+                      ].join(' ')}
+                    >
+                      <span className="font-display font-bold text-text block">{opt.label}</span>
+                      <span className="text-text-muted text-xs block mt-0.5">{opt.hint}</span>
+                      {isWrongPick && (
+                        <span className="text-coral text-xs font-semibold block mt-1">not this one</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {wrongOption && (
+                <div className="mt-3 flex items-start gap-2 bg-coral/10 border border-coral/30 rounded-xl px-3 py-2 animate-fadein">
+                  <span className="text-lg leading-none" aria-hidden>💡</span>
+                  <p className="text-sm text-text">
+                    {wrongOption.feedback}{' '}
+                    <span className="text-text-muted font-semibold">Give it another try!</span>
+                  </p>
+                </div>
               )}
             </>
           ) : (
             <div className="text-center">
-              <p className="text-2xl">🎉</p>
-              <h3 className="font-extrabold text-lg mt-1">
-                Nice! You jumped at <span className="font-mono text-primary">s = {challengeScore}</span>
+              <p className="text-3xl" aria-hidden>🎉</p>
+              <h3 className="font-display font-extrabold text-xl mt-1 text-text">
+                Yes! Your score is a variable.
               </h3>
               <p className="text-text-muted mt-1.5 text-sm max-w-md mx-auto">
-                That's algebra in action — you read a variable's value and acted on it. Ready for the
-                real run?
+                Its value changes as you play — that&apos;s exactly what a variable is. Now for the real
+                run: the obstacles are coming, so get ready to jump!
               </p>
               <button
-                onClick={onChallengeContinue}
-                className="mt-4 bg-primary hover:bg-primary-dark text-white font-bold px-7 py-2.5 rounded-xl transition-colors"
+                onClick={onFinish}
+                className="btn-pop mt-4 bg-primary text-white font-display font-extrabold text-lg px-9 py-3 rounded-2xl animate-pulse"
               >
-                Play for real! →
+                ▶ Play for real!
               </button>
             </div>
           )}

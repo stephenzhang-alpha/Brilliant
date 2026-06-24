@@ -86,12 +86,6 @@ export const DEATH_FLASH_MAX_ALPHA = 0.5;
 /** Seconds the celebratory milestone number "pops" near the score. */
 export const MILESTONE_POP_DURATION = 0.95;
 
-// --- Variables mini-lesson (interactive beat) -----------------------------
-/** The score value the player is asked to jump at during the tutorial. */
-export const CHALLENGE_TARGET = 50;
-/** Forgiving window: a jump within this many points below the target counts. */
-export const CHALLENGE_EARLY_BAND = 8;
-
 // --- Palette --------------------------------------------------------------
 // Vibrant, on-brand palette (shared family with Gate Runner + Tower).
 export const COLOR_DAY = {

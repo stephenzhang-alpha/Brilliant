@@ -7,7 +7,7 @@ import { ScoreChip } from '../score/ScoreHud';
 
 const UNLOCK_INFO: Record<'gates' | 'tower', { label: string }> = {
   gates: { label: 'Gate Runner (Expressions)' },
-  tower: { label: 'Algebra Tower (Equations & Inequalities)' },
+  tower: { label: 'Pull the Pin (Variables & Expressions)' },
 };
 
 // Full-page link back to the separate Project Equation course app.

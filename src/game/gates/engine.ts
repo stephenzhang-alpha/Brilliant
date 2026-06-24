@@ -1,35 +1,46 @@
 // ---------------------------------------------------------------------------
-// Gate Runner — engine (v3, juicy pseudo-3D)
+// Gate Runner — engine (v4, juicy pseudo-3D)
 //
 // A "math gates" runner rendered in the pseudo-3D, camera-behind-the-crowd style
-// of mobile-game ads: a road recedes toward a horizon, gates/enemies grow as
-// they rush toward you, and your crowd runs at the bottom of the screen.
+// of mobile-game ads: a road recedes toward a horizon, gates grow as they rush
+// toward you, and your crowd runs at the bottom of the screen.
 //
-// Algebra theming (Stage 2 — Expressions):
-//   • You begin as the variable x (an unknown value).
-//   • An ASSIGNMENT gate gives x a concrete value (x = 6 / x = 9 …).
-//   • OPERATION gates transform your value (+n, ×n). As you pass, a floating cue
-//     shows the expression EVALUATING on your current number ("40 × 2 → 80"),
-//     so players literally watch expression evaluation happen to their own value.
-//   • ENEMY lanes subtract from your value — steer to the other side.
-//   • A FINAL BOSS clashes with your crowd; the survivors are your score.
+// Algebra theming (Stage 2 — Expressions). YOU ARE AN EXPRESSION in x:
+//   • You begin as the variable x (coefficient 1) — a crowd of "x" runners.
+//   • OPERATION gates add or subtract MULTIPLES OF x ("+2x", "−x", …). Passing
+//     one COMBINES LIKE TERMS into your running coefficient (3x then "+2x" → 5x),
+//     and a floating cue shows the combination ("3x + 2x = 5x") so players watch
+//     like terms combine on their own expression. Subtract gates are the bad
+//     lane to avoid; the coefficient is clamped so it never drops below 0.
+//   • The LAST gate before the boss is the variable ASSIGNMENT: it gives x a
+//     single-digit value (x = 6 / x = 8). Crossing it EVALUATES your expression
+//     in an emphasized beat ("5x → 5×7 = 35") and your value becomes that number.
+//   • A FINAL BOSS subtracts its power from your numeric value; the survivors are
+//     your score.
+//
+// Pedagogy: variable → combining like terms (building the expression) →
+// evaluating it once x is assigned.
 //
 // Juice: pooled particle bursts on every gate, a crowd "pop" on growth, a combo
 // streak for consecutive good picks, speed lines that intensify with the combo,
-// near-miss/dodge sparks at enemies, a satisfying boss clash, and a camera that
+// dodge sparks at subtract gates, a satisfying boss clash, and a camera that
 // leans/pans with your steering. All integration is in units-per-second so it is
 // frame-rate independent, and the hot draw loops avoid per-frame allocations.
 //
-// Scoring is tuned (Monte-Carlo verified) so a strong run lands in the few
-// hundreds and breaking 1000 is genuinely hard. The React layer runs the rAF
-// loop, calls update(dt) + draw(ctx), forwards input, and reads status/count.
+// Scoring is tuned (Monte-Carlo verified) so a strong run lands in the low
+// hundreds (coefficient × single digit, minus boss) and breaking 1000 is
+// effectively impossible. The React layer runs the rAF loop, calls update(dt) +
+// draw(ctx), forwards input, and reads status/count.
 // ---------------------------------------------------------------------------
 
 export type GateStatus = 'ready' | 'running' | 'complete';
-export type ChoiceKind = 'assign' | 'add' | 'mul' | 'enemy';
+// 'addx'/'subx' add or subtract a multiple of x (combine like terms);
+// 'assign' gives the variable x a concrete single-digit value (last gate).
+export type ChoiceKind = 'assign' | 'addx' | 'subx';
 
 interface Choice {
   kind: ChoiceKind;
+  // addx/subx → the multiple of x (1..4); assign → the digit value (1..9).
   val: number;
   color: string;
   label: string;
@@ -54,22 +65,23 @@ const CAM_D = 0.72; // camera distance — controls how fast things shrink
 const Z_START = 3.6; // distance of the first gate at the start
 const ROW_GAP_Z = 1.5; // z-distance between gate rows
 const SPEED_Z = 1.18; // z-units travelled per second
-const NUM_ROWS = 11; // row 0 = assignment, then ops / enemies
-const BOSS_GAP_Z = 1.3; // extra distance to the boss after the last row
+const OP_ROWS = 9; // combine-like-terms operation rows (then the assignment gate)
+const NUM_ROWS = OP_ROWS + 1; // total gate rows: ops + the final assignment gate
+const ASSIGN_Z = Z_START + OP_ROWS * ROW_GAP_Z; // the assignment gate sits last
+const BOSS_GAP_Z = 2.4; // gap after assignment — lets the EVALUATE beat land first
 const KEY_LANE_SPEED = 2.6; // lane units per second from keyboard
 const DOT_CAP = 80;
 const GATE_NEAR_H = 100; // gate panel height at the near plane (s = 1)
 
 const CAM_FOLLOW = 24; // px the camera pans opposite to your lane (lean into turns)
 const BOSS_CLASH_T = 0.62; // seconds the clash plays before the finish card
-const MAX_MUL_GATES = 3; // hard cap on multiply gates so growth can't run away
 
 // Palette — the shared Algebra Quest design language.
 const C = {
-  assign: '#7c3aed', // violet
-  add: '#22c55e', // green
-  mul: '#06b6d4', // cyan
-  enemy: '#fb5b6b', // coral
+  assign: '#7c3aed', // violet — the variable / assignment gate
+  add: '#22c55e', // green — add-a-multiple-of-x gate (good lane)
+  accent: '#06b6d4', // cyan — evaluation beat accent
+  enemy: '#fb5b6b', // coral — subtract-a-multiple-of-x gate (avoid)
   boss: '#b91c1c', // deep red boss
   combo: '#f59e0b', // amber
   combo2: '#ec4899', // pink (hot streak)
@@ -91,30 +103,25 @@ function pick<T>(arr: T[]): T {
 }
 const byZDesc = (a: GateRow, b: GateRow) => b.z - a.z;
 
+// A term in x: 0 → "0", 1 → "x", k → "kx". Keeps cues reading like real algebra.
+function termX(n: number): string {
+  return n === 0 ? '0' : n === 1 ? 'x' : `${n}x`;
+}
+
 function assignChoice(val: number): Choice {
   return { kind: 'assign', val, color: C.assign, label: `x = ${val}` };
 }
-function addChoice(val: number): Choice {
-  return { kind: 'add', val, color: C.add, label: `+${val}` };
+function addxChoice(val: number): Choice {
+  return { kind: 'addx', val, color: C.add, label: `+${termX(val)}` };
 }
-function mulChoice(val: number): Choice {
-  return { kind: 'mul', val, color: C.mul, label: `×${val}` };
-}
-function enemyChoice(val: number): Choice {
-  return { kind: 'enemy', val, color: C.enemy, label: `−${val}` };
+function subxChoice(val: number): Choice {
+  return { kind: 'subx', val, color: C.enemy, label: `−${termX(val)}` };
 }
 
-function applyChoice(count: number, ch: Choice): number {
-  switch (ch.kind) {
-    case 'assign':
-      return ch.val;
-    case 'add':
-      return count + ch.val;
-    case 'mul':
-      return count * ch.val;
-    case 'enemy':
-      return Math.max(0, count - ch.val);
-  }
+// Combine an operation gate into the current coefficient (like terms). The
+// coefficient is clamped at 0 so a subtract gate can never take you negative.
+function combineCoef(coef: number, ch: Choice): number {
+  return ch.kind === 'subx' ? Math.max(0, coef - ch.val) : coef + ch.val;
 }
 
 interface Dot {
@@ -139,8 +146,8 @@ interface Particle {
   active: boolean;
 }
 interface Cue {
-  main: string; // "40 × 2 → 80"
-  tag: string; // "" | "BIGGER!" | "DODGED!" | "OUCH!" | "BOSS!"
+  main: string; // "3x + 2x = 5x" or "5x → 5×7 = 35"
+  tag: string; // "" | "BIGGER!" | "DODGED!" | "OUCH!" | "EVALUATE!" | "BOSS!"
   color: string;
   x: number;
   y: number;
@@ -152,8 +159,10 @@ interface Cue {
 
 export class GateRunner {
   status: GateStatus = 'ready';
-  count = 0;
+  count = 0; // current numeric value: 0 while still an expression, set on assignment
+  coef = 1; // coefficient of x while building the expression (you start as 1·x)
   assigned = false;
+  assignedX = 0; // the single-digit value x is given at the assignment gate
   rowsCleared = 0;
   readonly totalRows = NUM_ROWS;
   bossPower = 0;
@@ -234,7 +243,9 @@ export class GateRunner {
   reset() {
     this.status = 'ready';
     this.count = 0;
+    this.coef = 1;
     this.assigned = false;
+    this.assignedX = 0;
     this.rowsCleared = 0;
     this.bossDefeated = false;
     this.combo = 0;
@@ -257,49 +268,48 @@ export class GateRunner {
     for (const p of this.particles) p.active = false;
     for (const cu of this.cues) cu.active = false;
     this.buildRows();
-    this.bossZ = Z_START + NUM_ROWS * ROW_GAP_Z + BOSS_GAP_Z;
-    this.bossPower = randInt(150, 210);
+    this.bossZ = ASSIGN_Z + BOSS_GAP_Z;
+    // Tuned for the new scale: your value is coefficient × single digit (low
+    // hundreds at best), so the boss takes a modest, survivable bite.
+    this.bossPower = randInt(40, 80);
   }
 
-  // Generate the gate rows for a run. Multiply gates are capped (and paired
-  // against a strong "+n" so the better choice depends on your current value)
-  // which keeps multiplicative growth from blowing past 1000.
+  // Generate the gate rows for a run. First come OP_ROWS "combine like terms"
+  // rows (add/subtract a small multiple of x), biased so the coefficient keeps
+  // growing — subtract gates are the worse lane to avoid. The variable
+  // ASSIGNMENT gate is placed LAST, immediately before the boss, offering two
+  // single-digit values to steer between. The magnitudes are small so a strong
+  // run lands in the low hundreds and 1000 stays effectively out of reach.
   private buildRows() {
     this.rows = [];
-    let muls = 0;
-    for (let i = 0; i < NUM_ROWS; i++) {
+    for (let i = 0; i < OP_ROWS; i++) {
       const z = Z_START + i * ROW_GAP_Z;
-      if (i === 0) {
-        const a = randInt(6, 9);
-        const b = a + randInt(2, 4);
-        const row: GateRow =
-          Math.random() < 0.5
-            ? { z, left: assignChoice(a), right: assignChoice(b), applied: false }
-            : { z, left: assignChoice(b), right: assignChoice(a), applied: false };
-        this.rows.push(row);
-        continue;
-      }
       let left: Choice;
       let right: Choice;
-      if (Math.random() < 0.42) {
-        // Enemy lane vs. a safe gain — steer away from the red.
-        const enemy = enemyChoice(randInt(40, 105));
-        const gain = addChoice(randInt(12, 22));
-        [left, right] = Math.random() < 0.5 ? [enemy, gain] : [gain, enemy];
-      } else if (muls < MAX_MUL_GATES && Math.random() < 0.55) {
-        // Teaching pair: a big "+n" vs. a "×n". Which wins depends on your value.
-        muls++;
-        const m = Math.random() < 0.15 ? 3 : 2;
-        [left, right] =
-          Math.random() < 0.5 ? [addChoice(randInt(24, 36)), mulChoice(m)] : [mulChoice(m), addChoice(randInt(24, 36))];
+      // The opener is always a clean "pick the bigger add" so the mechanic reads
+      // immediately; after that ~40% of rows pair a good add against a subtract.
+      if (i > 0 && Math.random() < 0.4) {
+        // Trap row: a healthy "+kx" vs. a "−kx" you should dodge.
+        const good = addxChoice(randInt(2, 3));
+        const bad = subxChoice(randInt(1, 3));
+        [left, right] = Math.random() < 0.5 ? [good, bad] : [bad, good];
       } else {
-        // Two adds of clearly different size — read fast, pick the bigger.
-        const small = addChoice(randInt(12, 20));
-        const big = addChoice(randInt(22, 34));
-        [left, right] = Math.random() < 0.5 ? [small, big] : [big, small];
+        // Two adds of different size — read fast, steer into the bigger gain.
+        const small = randInt(1, 2);
+        const big = randInt(small + 1, 3);
+        [left, right] =
+          Math.random() < 0.5 ? [addxChoice(small), addxChoice(big)] : [addxChoice(big), addxChoice(small)];
       }
       this.rows.push({ z, left, right, applied: false });
     }
+
+    // Final gate: assign x a single digit. Two distinct choices keep it a real
+    // steering decision (and the bigger digit is the better pick).
+    const a = randInt(4, 9);
+    let b = randInt(4, 9);
+    while (b === a) b = randInt(4, 9);
+    const [aL, aR] = Math.random() < 0.5 ? [a, b] : [b, a];
+    this.rows.push({ z: ASSIGN_Z, left: assignChoice(aL), right: assignChoice(aR), applied: false });
   }
 
   start() {
@@ -393,8 +403,8 @@ export class GateRunner {
     cu.color = color;
     cu.x = this.crowdX();
     cu.y = NEAR_Y - 98 - Math.min(64, Math.sqrt(Math.max(1, this.count)) * 3);
-    cu.vy = -30;
-    cu.ttl = tag === 'BOSS!' ? 1.35 : 1.05;
+    cu.vy = tag === 'EVALUATE!' ? -20 : -30;
+    cu.ttl = tag === 'EVALUATE!' ? 1.7 : tag === 'BOSS!' ? 1.35 : 1.05;
     cu.life = cu.ttl;
     cu.active = true;
   }
@@ -464,25 +474,30 @@ export class GateRunner {
   }
 
   // Resolve a gate the instant it reaches the player line: apply the math, fire
-  // the matching juice, and float the expression evaluation cue.
+  // the matching juice, and float the like-terms / evaluation cue.
   private applyRow(r: GateRow) {
     const isLeft = this.lane < 0;
     const ch = isLeft ? r.left : r.right;
     const other = isLeft ? r.right : r.left;
-    const before = this.assigned ? this.count : 0;
-    const after = applyChoice(before, ch);
-    const otherRes = applyChoice(before, other);
-
-    this.count = after;
-    if (ch.kind === 'assign') this.assigned = true;
     r.applied = true;
     this.rowsCleared++;
 
-    const px = this.crowdX();
-    const sym = ch.kind === 'mul' ? '×' : ch.kind === 'add' ? '+' : ch.kind === 'enemy' ? '−' : '=';
-    const main = ch.kind === 'assign' ? `x = ${after}` : `${before} ${sym} ${ch.val} → ${after}`;
+    if (ch.kind === 'assign') {
+      this.applyAssign(ch, isLeft);
+      return;
+    }
 
-    if (ch.kind === 'enemy') {
+    // Combine like terms into the running coefficient.
+    const before = this.coef;
+    const after = combineCoef(before, ch);
+    const otherAfter = combineCoef(before, other);
+    this.coef = after;
+
+    const px = this.crowdX();
+    const sym = ch.kind === 'subx' ? '−' : '+';
+    const main = `${termX(before)} ${sym} ${termX(ch.val)} = ${termX(after)}`;
+
+    if (ch.kind === 'subx') {
       this.combo = 0;
       this.shake = Math.max(this.shake, 9);
       this.hitFlash = 1;
@@ -499,15 +514,42 @@ export class GateRunner {
     this.gatePassBurst(gp.x, gp.y - GATE_NEAR_H * 0.5, ch.color);
 
     let tag = '';
-    if (other.kind === 'enemy') {
+    if (other.kind === 'subx') {
       const ep = this.project(isLeft ? 0.52 : -0.52, 0);
       this.dodgeSpark(ep.x, ep.y - GATE_NEAR_H * 0.5);
       tag = 'DODGED!';
-    } else if (after > otherRes) {
+    } else if (after > otherAfter) {
       tag = 'BIGGER!';
       this.comboConfetti(px, NEAR_Y - 30, 8 + Math.min(10, this.combo));
     }
     this.spawnCue(main, tag, ch.color);
+  }
+
+  // The final gate gives x a value. We EVALUATE the expression here — your
+  // coefficient × the assigned digit becomes your numeric value — with an
+  // emphasized beat so players watch the expression resolve to a number.
+  private applyAssign(ch: Choice, isLeft: boolean) {
+    const coef = this.coef;
+    const digit = ch.val;
+    const value = coef * digit;
+    this.assignedX = digit;
+    this.count = value;
+    this.assigned = true;
+
+    this.combo++;
+    if (this.combo > this.bestCombo) this.bestCombo = this.combo;
+    this.comboPulse = 1;
+    this.crowdPop = 1;
+    this.shake = Math.max(this.shake, 7);
+    this.whiteFlash = 0.6;
+
+    const px = this.crowdX();
+    const gp = this.project(isLeft ? -0.52 : 0.52, 0);
+    this.gatePassBurst(gp.x, gp.y - GATE_NEAR_H * 0.5, C.assign);
+    this.comboConfetti(px, NEAR_Y - 30, 22);
+
+    // "5x → 5×7 = 35" — substitute x, then evaluate to a number.
+    this.spawnCue(`${termX(coef)} → ${coef}×${digit} = ${value}`, 'EVALUATE!', C.accent);
   }
 
   private hitBoss() {
@@ -707,7 +749,7 @@ export class GateRunner {
     const h = GATE_NEAR_H * s * (1 + near * 0.04);
     if (h < 2) return;
 
-    if (ch.kind === 'enemy') this.drawEnemy(ctx, ch, p.x, p.y, w, h, s, near);
+    if (ch.kind === 'subx') this.drawEnemy(ctx, ch, p.x, p.y, w, h, s, near);
     else this.drawGate(ctx, ch, p.x, p.y, w, h, s, near);
   }
 
@@ -899,24 +941,13 @@ export class GateRunner {
   private drawCrowd(ctx: CanvasRenderingContext2D) {
     const px = this.crowdX();
 
-    if (!this.assigned) {
-      const bob = Math.sin(this.tick * 0.12) * 4;
-      ctx.save();
-      ctx.translate(px, NEAR_Y - 26 + bob);
-      ctx.shadowColor = C.assign;
-      ctx.shadowBlur = 18;
-      ctx.fillStyle = C.assign;
-      ctx.font = '800 78px Fredoka, Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('x', 0, 0);
-      ctx.restore();
-      this.drawBubble(ctx, px, 'x');
-      return;
-    }
-
-    const shown = Math.max(1, Math.min(DOT_CAP, this.count));
-    const baseScale = 1.1 + Math.min(1.4, this.count / 170);
+    // The crowd IS your expression: while unassigned each runner is an "x", so
+    // the crowd size tracks the coefficient. Once x is assigned, the crowd
+    // explodes to the evaluated number.
+    const expr = !this.assigned;
+    const magnitude = expr ? this.coef : this.count;
+    const shown = Math.max(1, Math.min(DOT_CAP, magnitude));
+    const baseScale = expr ? 1.0 + Math.min(0.95, this.coef / 26) : 1.1 + Math.min(1.4, this.count / 170);
     const scale = baseScale * (1 + this.crowdPop * 0.45);
     const lean = Math.max(-0.45, Math.min(0.45, this.laneVel * 0.05));
 
@@ -936,10 +967,19 @@ export class GateRunner {
       ctx.beginPath();
       ctx.arc(d.ox * scale, d.oy * scale + bob, rDot, 0, Math.PI * 2);
       ctx.fill();
+      // A tiny "x" badge on the lead runner reinforces "you are the variable x".
+      if (expr && i === 0 && rDot > 4) {
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.font = `800 ${Math.round(rDot * 1.5)}px Fredoka, Inter, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('x', d.ox * scale, d.oy * scale + bob);
+        ctx.textBaseline = 'alphabetic';
+      }
     }
     ctx.restore();
 
-    this.drawBubble(ctx, px, this.count.toLocaleString());
+    this.drawBubble(ctx, px, expr ? termX(this.coef) : this.count.toLocaleString());
   }
 
   private drawBubble(ctx: CanvasRenderingContext2D, px: number, label: string) {
@@ -1005,7 +1045,16 @@ export class GateRunner {
 
       if (cu.tag) {
         const ty = cu.y - size * 0.95;
-        const accent = cu.tag === 'OUCH!' ? C.enemy : cu.tag === 'BOSS!' ? C.boss : cu.tag === 'DODGED!' ? C.add : C.combo;
+        const accent =
+          cu.tag === 'OUCH!'
+            ? C.enemy
+            : cu.tag === 'BOSS!'
+              ? C.boss
+              : cu.tag === 'DODGED!'
+                ? C.add
+                : cu.tag === 'EVALUATE!'
+                  ? C.assign
+                  : C.combo;
         const pop = 1 + (1 - k) * 0.15;
         ctx.font = `800 ${Math.round(15 * pop)}px Fredoka, Inter, sans-serif`;
         ctx.lineWidth = 3;
@@ -1115,7 +1164,9 @@ export class GateRunner {
     return {
       s: this.status,
       c: this.count,
+      coef: this.coef,
       assigned: this.assigned,
+      x: this.assignedX,
       lane: Number(this.lane.toFixed(2)),
       boss: this.bossPower,
       combo: this.combo,

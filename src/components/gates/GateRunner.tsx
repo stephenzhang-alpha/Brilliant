@@ -127,8 +127,16 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
   }, []);
 
   const headline =
-    finalCount >= 1000 ? 'JACKPOT!' : finalCount >= 500 ? 'Huge run!' : finalCount >= 200 ? 'Nice run!' : 'Finish!';
-  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 500 ? '🚀' : '🎉';
+    finalCount >= 1000
+      ? 'JACKPOT!'
+      : finalCount >= 185
+        ? 'Incredible!'
+        : finalCount >= 130
+          ? 'Huge run!'
+          : finalCount >= 75
+            ? 'Nice run!'
+            : 'Finish!';
+  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 185 ? '🚀' : '🎉';
 
   return (
     <div className="w-full max-w-[430px] mx-auto">
@@ -147,14 +155,14 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
             <div className="bg-black/55 backdrop-blur-sm rounded-2xl px-6 py-5">
               <p className="font-display text-white font-extrabold text-2xl">Gate Runner</p>
               <p className="text-white/85 mt-2 text-[15px] leading-snug">
-                You start as the variable <b>x</b>. Pick an <b className="text-primary-light">assignment</b> gate to
-                give x a value, then grow it through <b className="text-lime">+</b> and{' '}
-                <b className="text-cyan">×</b> gates. Watch each step <b>evaluate on your number</b> — and always grab
-                the <b>bigger</b> result!
+                You <b>are</b> an expression in <b>x</b>! Start as <b>x</b> and steer into the green{' '}
+                <b className="text-lime">+x</b> gates to <b>combine like terms</b> — watch yourself grow{' '}
+                <b>x → 3x → 5x</b>. Always grab the <b>bigger</b> add.
               </p>
               <p className="text-white/85 mt-2 text-[15px] leading-snug">
-                Dodge the <b className="text-coral">red enemies</b> that subtract, keep a <b className="text-amber">combo</b> going,
-                then survive the <b>boss</b>.
+                Dodge the <b className="text-coral">−x subtract monsters</b>. At the finish, x gets a value and you{' '}
+                <b className="text-primary-light">EVALUATE</b> (<b>5x → 5×7 = 35</b>) — then survive the{' '}
+                <b>boss</b>!
               </p>
               <p className="text-white/70 text-sm mt-3">Drag, or use ← → · Tap to start</p>
             </div>

@@ -50,7 +50,6 @@ import {
   DEATH_FLASH_DURATION,
   DEATH_FLASH_MAX_ALPHA,
   MILESTONE_POP_DURATION,
-  CHALLENGE_EARLY_BAND,
 } from './constants';
 import {
   drawDino,
@@ -218,14 +217,9 @@ export class DinoGame {
   private hillOffsetFar = 0;
   private hillOffsetNear = 0;
 
-  // Interactive "jump when s reaches the target" tutorial beat.
-  private challengeActive = false;
-  private challengeTarget = 0;
-
   // Callbacks (wired by the React layer)
   onGameOver: ((score: number) => void) | null = null;
   onMilestone: ((score: number) => void) | null = null;
-  onChallengeResult: ((success: boolean, score: number) => void) | null = null;
 
   constructor() {
     this.initParticles();
@@ -272,7 +266,6 @@ export class DinoGame {
     this.deathFlash = 0;
     this.milestonePopTimer = 0;
     this.milestonePopValue = 0;
-    this.challengeActive = false;
     this.deactivateParticles();
     this.initScenery();
   }
@@ -302,42 +295,27 @@ export class DinoGame {
   }
 
   /**
-   * Arm the interactive "jump when the score s reaches the target" beat used by
-   * the variables mini-lesson. Keeps the dino in the safe free-run state and
-   * restarts the score from zero so the player can watch the variable climb.
+   * Begin the one-time onboarding "free run": the dino runs and the score ticks
+   * up, but no obstacles spawn and nothing can hurt it. The score / high-score
+   * HUD is highlighted so the variables lesson can point straight at it. Call
+   * beginRealGame() once the player answers the variables question correctly.
    */
-  armChallenge(target: number) {
-    this.challengeActive = true;
-    this.challengeTarget = target;
-    this.highlightScore = true;
+  startTutorial() {
+    this.reset();
     this.obstaclesEnabled = false;
-    this.obstacles = [];
-    this.score = 0;
-    this.scoreFloat = 0;
-    this.distance = 0;
-    this.speed = SPEED_START;
-    this.lastMilestone = 0;
-    this.nightT = 0;
+    this.highlightScore = true;
     this.status = 'running';
-    this.onGround = true;
-    this.dinoVy = 0;
-    this.dinoY = GROUND_Y - DINO_HEIGHT;
   }
 
-  private evaluateChallengeJump() {
-    if (!this.challengeActive) return;
-    // Too early — let them try again as s keeps climbing (no penalty).
-    if (this.score < this.challengeTarget - CHALLENGE_EARLY_BAND) {
-      this.onChallengeResult?.(false, this.score);
-      return;
-    }
-    this.challengeActive = false;
-    this.highlightScore = false;
-    this.shakeTimer = 0;
+  /**
+   * A quick celebratory flourish (confetti burst + score pop). Played when the
+   * player answers the variables question correctly, right before obstacles are
+   * switched on by beginRealGame().
+   */
+  celebrate() {
     this.spawnCelebration();
     this.milestonePopTimer = MILESTONE_POP_DURATION;
     this.milestonePopValue = this.score;
-    this.onChallengeResult?.(true, this.score);
   }
 
   /** Context-aware primary action: start, jump, or restart. */
@@ -361,7 +339,6 @@ export class DinoGame {
       this.onGround = false;
       this.squash = SQUASH_TAKEOFF; // stretch up off the line
       this.spawnDust('jump');
-      if (this.challengeActive) this.evaluateChallengeJump();
     }
   }
 
