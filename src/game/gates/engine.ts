@@ -184,7 +184,7 @@ interface Particle {
   active: boolean;
 }
 interface Cue {
-  main: string; // "3x + 2x = 5x" or "5x → 5×7 = 35"
+  main: string; // "3x + 2x = 5x" (like terms) or "x = 7: 3x + 5 = 26" (evaluation)
   tag: string; // "" | "BIGGER!" | "DODGED!" | "OUCH!" | "EVALUATE!" | "BOSS!"
   color: string;
   x: number;
@@ -757,7 +757,9 @@ export class GateRunner {
     this.evaluated = true;
 
     const px = this.crowdX();
-    const line = `${this.evalLine(this.assignedX)} = ${this.evalAnswer}`;
+    // Frame the floating cue as evaluating the EXPRESSION at a value
+    // ("x = 7: 3x + 5 = 26") rather than a bare substituted line.
+    const line = `x = ${this.assignedX}: ${this.exprLabel()} = ${this.evalAnswer}`;
     if (correct) {
       this.whiteFlash = 0.7;
       this.comboPulse = 1;

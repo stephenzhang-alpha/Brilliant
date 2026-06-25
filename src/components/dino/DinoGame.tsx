@@ -64,18 +64,19 @@ export interface DeathOffer {
 }
 
 /**
- * One-time onboarding shown as a centered modal pop-up BEFORE the real game
- * begins. The dino free-runs (no obstacles) behind the dimmed pop-up so the
- * scene stays alive, and the live score & high score are used as the two
- * concrete example variables (the player's first lesson in algebra):
+ * The variables intro: a centered modal pop-up shown BEFORE obstacles start —
+ * on the very first load AND again before every replay, so the lesson gates
+ * every run (it is intentionally NOT a once-per-player gate). The dino
+ * free-runs (no obstacles) behind the dimmed pop-up so the scene stays alive,
+ * and the live score & high score are used as the two concrete example
+ * variables (the player's first lesson in algebra):
  *   • 'lesson' — explain what a variable is, pointing at the live score &
- *     high score (their values change as you play).
+ *     high score (their values change as you play). Shown on the first run.
  *   • 'quiz'   — a must-pass multiple-choice check; answer correctly to start.
- *   • null     — onboarding done (or already seen): play normally, obstacles on.
+ *     Replays open straight here so the recap stays quick.
+ *   • null     — pop-up complete: play normally, obstacles on.
  */
 type TutorialStep = 'lesson' | 'quiz' | null;
-
-const TUTORIAL_SEEN_KEY = 'dino_var_tutorial_seen';
 
 interface QuizOption {
   id: string;
@@ -132,9 +133,9 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
   const [lastScore, setLastScore] = useState(0);
   const [isNewBest, setIsNewBest] = useState(false);
   const [offer, setOffer] = useState<DeathOffer | null>(null);
-  const [tutorialStep, setTutorialStep] = useState<TutorialStep>(() =>
-    localStorage.getItem(TUTORIAL_SEEN_KEY) ? null : 'lesson',
-  );
+  // The variables pop-up gates every run, so it always opens: the full lesson
+  // on the first run, and straight to the quick check on replays.
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep>('lesson');
   // Live mirror of the two example variables, polled while the lesson is up.
   const [liveScore, setLiveScore] = useState(0);
   const [liveHigh, setLiveHigh] = useState(0);
@@ -150,11 +151,28 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
   const onRunScoreRef = useRef(onRunScore);
   const tutorialStepRef = useRef(tutorialStep);
   const activeRef = useRef(active);
+  const restartRef = useRef<(() => void) | null>(null);
+
+  // "Play again" after a death. The variables pop-up gates EVERY run, so this
+  // re-opens it (streamlined straight to the quick check) and starts a fresh
+  // free-run with NO obstacles. beginRealGame() — fired once the player answers
+  // — is the only thing that switches obstacles back on, so they never resume
+  // until the pop-up is completed. Defined before the sync effect below so the
+  // keyboard handler can reach it through restartRef.
+  const restart = useCallback(() => {
+    setOffer(null);
+    setWrongPick(null);
+    setQuizDone(false);
+    setTutorialStep('quiz');
+    engineRef.current?.startTutorial();
+  }, []);
+
   useEffect(() => {
     getDeathOfferRef.current = getDeathOffer;
     onRunScoreRef.current = onRunScore;
     tutorialStepRef.current = tutorialStep;
     activeRef.current = active;
+    restartRef.current = restart;
   });
 
   // Keep the canvas HI counter in sync with the loaded personal best.
@@ -209,14 +227,12 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     };
     raf = requestAnimationFrame(loop);
 
-    // New players: kick off the variables free-run immediately so the dino is
-    // already running (animated, world scrolling, score ticking) with NO
-    // obstacles while the lesson plays. Obstacles only switch on once the quiz
-    // is answered correctly (beginRealGame). Returning players keep today's
-    // "press to start" behaviour, so the engine is left in its 'ready' state.
-    if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) {
-      engine.startTutorial();
-    }
+    // Open with the variables free-run immediately so the dino is already
+    // running (animated, world scrolling, score ticking) with NO obstacles
+    // while the pop-up plays. Obstacles only switch on once the quiz is
+    // answered correctly (beginRealGame). This fires on every fresh mount;
+    // each later replay re-arms the same free-run via restart() above.
+    engine.startTutorial();
 
     const isTyping = () => {
       const el = document.activeElement;
@@ -230,7 +246,13 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
       if (tutorialStepRef.current !== null) return;
       if (isJumpEvent(e)) {
         e.preventDefault();
-        if (!e.repeat) engine.primary();
+        // After a death the dino can't restart straight into obstacles: every
+        // run is gated by the variables pop-up, so route the replay through
+        // restart() (which re-opens it). Otherwise this is a normal jump.
+        if (!e.repeat) {
+          if (engine.status === 'over') restartRef.current?.();
+          else engine.primary();
+        }
       } else if (isDuckEvent(e)) {
         e.preventDefault();
         engine.setDuck(true);
@@ -275,11 +297,6 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     engineRef.current?.releaseJump();
   }, []);
 
-  const restart = useCallback(() => {
-    setOffer(null);
-    engineRef.current?.start();
-  }, []);
-
   // --- Variables onboarding flow ------------------------------------------
   const onLessonNext = useCallback(() => {
     setWrongPick(null);
@@ -292,10 +309,9 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
       setWrongPick(opt.id);
       return;
     }
-    // Correct! Mark the lesson seen, celebrate, then reveal the "play" gate.
+    // Correct! Celebrate, then reveal the "play for real" gate.
     setWrongPick(null);
     setQuizDone(true);
-    localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
     engineRef.current?.celebrate();
   }, []);
 
@@ -339,7 +355,11 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
         )}
 
         {status === 'over' && (
-          <div className="absolute inset-0 flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 flex items-center justify-center px-4"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+          >
             <div className="bg-black/65 backdrop-blur-sm rounded-xl px-6 py-3 sm:px-8 sm:py-4 text-center flex flex-col items-center gap-1.5 max-w-[92%]">
               <p className="text-white/80 tracking-[0.3em] text-xs sm:text-sm font-bold">GAME OVER</p>
               <p className="text-white text-2xl sm:text-3xl font-extrabold leading-none tabular-nums">
@@ -387,11 +407,12 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
         )}
       </div>
 
-      {/* --- Variables intro: a centered modal pop-up shown BEFORE the game ---
-          It's the first thing a new player sees. The dino free-runs (no
-          obstacles) behind the dimmed scrim so the scene stays alive, and the
-          live score / high score are the two concrete example variables.
-          Obstacles only switch on once the must-pass quiz is answered. */}
+      {/* --- Variables intro: a centered modal pop-up shown BEFORE obstacles ---
+          Shown on the first load AND before every replay (it gates each run).
+          The dino free-runs (no obstacles) behind the dimmed scrim so the
+          scene stays alive, and the live score / high score are the two
+          concrete example variables. Obstacles only switch on once the
+          must-pass quiz is answered. */}
       {tutorialStep !== null && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fadein"
@@ -554,7 +575,11 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
             className="flex-1 bg-surface border border-black/10 rounded-xl py-4 font-semibold text-text active:bg-surface-light"
             onPointerDown={(e) => {
               e.preventDefault();
-              engineRef.current?.primary();
+              // On a death this button replays — gate it through the variables
+              // pop-up (restart) instead of starting straight into obstacles.
+              const eng = engineRef.current;
+              if (eng?.status === 'over') restart();
+              else eng?.primary();
             }}
             onPointerUp={() => engineRef.current?.releaseJump()}
           >

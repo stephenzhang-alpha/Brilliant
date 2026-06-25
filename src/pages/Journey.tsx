@@ -43,13 +43,14 @@ export function JourneyPage() {
     };
     const el = map[id].current;
     const root = scrollRef.current;
-    // Scroll the journey container directly (more reliable than scrollIntoView
-    // inside a fixed, scroll-snap container) so every "Next" button reliably
+    // Scroll the journey container directly using measured positions (robust
+    // regardless of offsetParent / scroll-snap) so every "Next" button reliably
     // sends the player down to the next game.
     if (el && root) {
-      root.scrollTo({ top: el.offsetTop, behavior: 'smooth' });
+      const top = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop;
+      root.scrollTo({ top: Math.max(0, Math.round(top)), behavior: 'smooth' });
     } else {
-      el?.scrollIntoView({ behavior: 'smooth' });
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, []);
 

@@ -285,7 +285,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
                   ))}
                 </ul>
                 <p className="font-display text-primary font-bold text-[15px] mt-1">
-                  {teachData.expr} → {teachData.example}
+                  {teachData.expr} when x = {TEACH_X} → {teachData.example}
                 </p>
               </div>
               <button
@@ -305,9 +305,11 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
                 <>
                   <p className="font-display tracking-[0.2em] text-text-muted text-[11px] font-bold">YOUR TURN!</p>
                   <p className="text-text text-[15px] mt-2 leading-snug">
-                    You are <b className="text-primary font-display">{evalData.expr}</b> and <b>x = {evalData.x}</b>.
+                    You built <b className="text-primary font-display">{evalData.expr}</b> and now <b>x = {evalData.x}</b>.
                   </p>
-                  <p className="font-display text-text font-bold text-lg mt-3">What is {evalData.line}?</p>
+                  <p className="font-display text-text font-bold text-lg mt-3">
+                    What is <b className="text-primary">{evalData.expr}</b> when x = {evalData.x}?
+                  </p>
                   <div className="mt-4 grid grid-cols-2 gap-2.5">
                     {evalData.options.map((opt) => (
                       <button
@@ -325,9 +327,12 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
                   <p className="text-3xl">🎉</p>
                   <p className="font-display text-lime font-extrabold text-xl mt-1">Correct!</p>
                   <p className="text-text text-[15px] mt-2">
-                    {evalData.line} = <b className="tabular-nums">{evalData.answer}</b>
+                    <b className="text-primary font-display">{evalData.expr}</b> when x = {evalData.x} is{' '}
+                    <b className="tabular-nums">{evalData.answer}</b>
                   </p>
-                  <p className="text-text-muted text-[13px] mt-1">You evaluated it yourself! 🌟</p>
+                  <p className="text-text-muted text-[13px] mt-1">
+                    {evalData.line} = {evalData.answer} — you evaluated it yourself! 🌟
+                  </p>
                   <button
                     onClick={() => engineRef.current?.continueFromEval()}
                     className="mt-5 w-full bg-primary hover:bg-primary-dark text-white font-display font-bold px-6 py-3 rounded-xl transition-colors"
@@ -350,7 +355,8 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
                     ))}
                   </ul>
                   <p className="font-display text-text font-bold text-[15px] mt-2">
-                    So {evalData.line} = <b className="text-lime tabular-nums">{evalData.answer}</b>
+                    So <b className="text-primary font-display">{evalData.expr}</b> when x = {evalData.x} is{' '}
+                    <b className="text-lime tabular-nums">{evalData.answer}</b>
                   </p>
                   <button
                     onClick={() => engineRef.current?.continueFromEval()}

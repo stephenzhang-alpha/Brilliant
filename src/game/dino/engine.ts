@@ -295,10 +295,11 @@ export class DinoGame {
   }
 
   /**
-   * Begin the one-time onboarding "free run": the dino runs and the score ticks
-   * up, but no obstacles spawn and nothing can hurt it. The score / high-score
-   * HUD is highlighted so the variables lesson can point straight at it. Call
-   * beginRealGame() once the player answers the variables question correctly.
+   * Begin the variables "free run": the dino runs and the score ticks up, but
+   * no obstacles spawn and nothing can hurt it. The score / high-score HUD is
+   * highlighted so the variables pop-up can point straight at it. Re-armed
+   * before every run (not just once); beginRealGame() then switches obstacles
+   * on once the player answers the variables question correctly.
    */
   startTutorial() {
     this.reset();

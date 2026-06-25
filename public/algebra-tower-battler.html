@@ -127,6 +127,20 @@
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
   .feedback { text-align:center; min-height:18px; margin-top:clamp(8px,2vw,11px); font-weight:600; font-size:clamp(12.5px,3.4vw,14px); line-height:1.36; }
   .feedback.good { color:var(--green-d); } .feedback.bad { color:var(--red); }
+  .feedback.solve { color:var(--ink); }
+  .feedback .lead { display:block; }
+  .feedback.solve .lead { color:var(--violet); font-weight:800; }
+  .feedback .steps { list-style:none; max-width:330px; margin:9px auto 2px; display:flex; flex-direction:column; gap:6px; text-align:left; }
+  .feedback .steps li { display:flex; align-items:flex-start; gap:9px; background:#f5f2fe; border:1.5px solid #e6deff; border-radius:13px; padding:8px 11px; color:var(--ink); font-weight:600; font-size:clamp(12.5px,3.3vw,14px); line-height:1.36; animation:stepIn .32s ease both; }
+  .feedback .steps li:nth-child(2){ animation-delay:.07s; } .feedback .steps li:nth-child(3){ animation-delay:.14s; } .feedback .steps li:nth-child(4){ animation-delay:.21s; }
+  @keyframes stepIn { 0%{opacity:0;transform:translateY(6px)} 100%{opacity:1;transform:translateY(0)} }
+  .feedback .steps li .n { flex:0 0 auto; width:20px; height:20px; border-radius:50%; background:var(--violet); color:#fff; font-size:11.5px; font-weight:800; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .feedback .steps li .t { flex:1 1 auto; }
+  .feedback .steps li b { color:var(--violet); font-weight:800; }
+  .feedback .steps li.final { background:#e9fbef; border-color:#a7f3c0; }
+  .feedback .steps li.final .n { background:var(--green-d); }
+  .feedback .steps li.final b { color:var(--green-d); }
+  .feedback .tapline { display:block; margin-top:8px; color:var(--green-d); font-weight:800; }
   .cancel {
     display:block; margin:11px auto 0; font-family:inherit; font-size:13px; font-weight:700;
     color:var(--muted); background:none; border:none; cursor:pointer; padding:6px 10px;
@@ -929,19 +943,31 @@
     var g = diffGen(0, null, 4), L1 = pick(LETTERS), v, b, c, ans;
     if (g === 0) { v = rint(2, 9); b = rint(2, 9); ans = v + b;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " + " + b + "</span>?", choices: numChoices(ans),
-        hint1: "Put <b>" + v + "</b> in for " + L1 + ", then add " + b + ".", hint2: v + " + " + b + " = ?" };
+        nudge: "start by putting <b>" + v + "</b> in place of <b>" + L1 + "</b>.",
+        steps: ["Replace " + L1 + " with its value: " + L1 + " = <b>" + v + "</b>",
+                "The expression becomes " + v + " + " + b,
+                "Add: " + v + " + " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 1) { v = rint(5, 12); b = rint(2, v - 1); ans = v - b;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " − " + b + "</span>?", choices: numChoices(ans),
-        hint1: "Put <b>" + v + "</b> in for " + L1 + ", then subtract " + b + ".", hint2: v + " − " + b + " = ?" };
+        nudge: "swap <b>" + L1 + "</b> for <b>" + v + "</b>, then subtract " + b + ".",
+        steps: ["Replace " + L1 + " with its value: " + L1 + " = <b>" + v + "</b>",
+                "The expression becomes " + v + " − " + b,
+                "Subtract: " + v + " − " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 2) { v = rint(2, 9); ans = 2 * v;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " + " + L1 + "</span>?", choices: numChoices(ans),
-        hint1: L1 + " + " + L1 + " is <b>two</b> " + v + "'s.", hint2: v + " + " + v + " = ?" };
+        nudge: L1 + " + " + L1 + " means two of them, and each one is <b>" + v + "</b>.",
+        steps: ["Each " + L1 + " is worth <b>" + v + "</b>",
+                "So " + L1 + " + " + L1 + " = " + v + " + " + v,
+                "Add: " + v + " + " + v + " = <b>" + ans + "</b>"] };
     }
     c = rint(2, 3); v = rint(2, 6); ans = c * v;
     return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + "</span>?", choices: numChoices(ans),
-      hint1: "<b>" + c + L1 + "</b> means " + c + " × " + L1 + ".", hint2: c + " × " + v + " = ?" };
+      nudge: "<b>" + c + L1 + "</b> means " + c + " × " + L1 + ". Put <b>" + v + "</b> in for " + L1 + ".",
+      steps: [c + L1 + " means <b>" + c + " × " + L1 + "</b>",
+              "Put in " + L1 + " = " + v + ": " + c + " × " + v,
+              "Multiply: " + c + " × " + v + " = <b>" + ans + "</b>"] };
   }
 
   function qVar() {
@@ -951,8 +977,10 @@
       var n1 = pick(nums), n2 = pick(nums); if (n2 === n1) n2 = "5";
       c = shuffle([{ label: L1, correct: true }, { label: n1, correct: false }, { label: sym, correct: false }, { label: n2, correct: false }]);
       return { concept: "Variables", prompt: "Which of these is a <b>variable</b>?", choices: c,
-        hint1: "A variable is a <b>letter</b> that holds a number we don't know yet.",
-        hint2: "Numbers and symbols aren't variables — pick the letter (" + L1 + ")." };
+        nudge: "a variable is a <b>letter</b> that stands for a number, so look for the letter.",
+        steps: ["A number like <b>" + n1 + "</b> is fixed — it always means the same thing",
+                "A sign like <b>" + sym + "</b> is an operation, not a variable",
+                "The letter <b>" + L1 + "</b> can stand for any number — that's the variable"] };
     }
     if (g === 1) {
       c = shuffle([{ label: "a letter that stands for a number", correct: true },
@@ -960,99 +988,148 @@
         { label: "a symbol like +", correct: false },
         { label: "always equal to 1", correct: false }]);
       return { concept: "Variables", prompt: "A <b>variable</b> is…", choices: c,
-        hint1: "A variable is a placeholder for an <b>unknown number</b>.",
-        hint2: "Think: a letter standing in for a number — pick that one." };
+        nudge: "think about what a variable <b>does</b>: it holds a number we don't know yet.",
+        steps: ["A variable is a placeholder for an unknown number",
+                "We write that placeholder as a <b>letter</b> (like x or n)",
+                "So a variable is <b>a letter that stands for a number</b>"] };
     }
     if (g === 2) {
       var b = rint(2, 9);
       c = shuffle([{ label: L1, correct: true }, { label: String(b), correct: false },
         { label: "+", correct: false }, { label: String(b + 3), correct: false }]);
       return { concept: "Variables", prompt: "In <span class='ex'>" + L1 + " + " + b + "</span>, which part is the <b>variable</b>?", choices: c,
-        hint1: "The <b>letter</b> is the variable; the number is a constant.",
-        hint2: "It's the part that can change — the letter " + L1 + "." };
+        nudge: "one part can change and one part is a fixed number — pick the part that can change.",
+        steps: ["The number <b>" + b + "</b> is a constant — it never changes",
+                "The <b>+</b> sign is just an operation",
+                "The letter <b>" + L1 + "</b> can change, so it is the variable"] };
     }
     if (g === 3) {
       c = shuffle([{ label: "variable", correct: true }, { label: "constant", correct: false },
         { label: "plus sign", correct: false }, { label: "total", correct: false }]);
       return { concept: "Variables", prompt: "Your <b>score</b> changes as you play. A value that can change is called a…", choices: c,
-        hint1: "Something that can take different values is a <b>variable</b>.",
-        hint2: "Score changes → it's a variable." };
+        nudge: "a value that can take different amounts has a special algebra name.",
+        steps: ["A <b>constant</b> stays the same, so that is not it",
+                "A value that can take different amounts is a <b>variable</b>",
+                "Your score keeps changing, so it acts like a <b>variable</b>"] };
     }
     c = shuffle([{ label: "It can stand for different numbers", correct: true },
       { label: "It is always 1", correct: false },
       { label: "It can never be a letter", correct: false },
       { label: "It always means add", correct: false }]);
     return { concept: "Variables", prompt: "Which statement about variables is <b>true</b>?", choices: c,
-      hint1: "A variable can hold <b>many different</b> values.",
-      hint2: "Pick: it can stand for different numbers." };
+      nudge: "remember what makes a variable special: its value is not fixed.",
+      steps: ["A variable is not stuck on one number like 1",
+              "It is written as a letter, and it does not mean 'add'",
+              "A variable <b>can stand for different numbers</b>"] };
   }
 
   function qEval() {
     var g = diffGen(1, null, 8), L1 = pick(LETTERS), v, c, b, ans;
     if (g === 0) { c = rint(2, 5); v = rint(2, 9); ans = c * v;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + "</span>?", choices: numChoices(ans),
-        hint1: c + L1 + " means <b>" + c + " × " + L1 + "</b>. Put " + v + " in for " + L1 + ".", hint2: c + " × " + v + " = ?" };
+        nudge: "<b>" + c + L1 + "</b> means " + c + " × " + L1 + ", so put <b>" + v + "</b> in for " + L1 + ".",
+        steps: [c + L1 + " means <b>" + c + " × " + L1 + "</b>",
+                "Put in " + L1 + " = " + v + ": " + c + " × " + v,
+                "Multiply: " + c + " × " + v + " = <b>" + ans + "</b>"] };
     }
     if (g === 1) { v = rint(2, 9); b = rint(2, 12); ans = v + b;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " + " + b + "</span>?", choices: numChoices(ans),
-        hint1: "Replace " + L1 + " with " + v + ", then add " + b + ".", hint2: v + " + " + b + " = ?" };
+        nudge: "replace <b>" + L1 + "</b> with <b>" + v + "</b>, then add " + b + ".",
+        steps: ["Replace " + L1 + " with " + v + ": " + v + " + " + b,
+                "Add: " + v + " + " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 2) { v = rint(6, 12); b = rint(2, v - 1); ans = v - b;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " − " + b + "</span>?", choices: numChoices(ans),
-        hint1: "Replace " + L1 + " with " + v + ", then subtract " + b + ".", hint2: v + " − " + b + " = ?" };
+        nudge: "put <b>" + v + "</b> in for " + L1 + ", then subtract " + b + ".",
+        steps: ["Replace " + L1 + " with " + v + ": " + v + " − " + b,
+                "Subtract: " + v + " − " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 3) { var d = rint(2, 4), kk = rint(2, 6); v = d * kk; ans = kk;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " ÷ " + d + "</span>?", choices: numChoices(ans),
-        hint1: "Put " + v + " in for " + L1 + ", then divide by " + d + ".", hint2: v + " ÷ " + d + " = ?" };
+        nudge: "put <b>" + v + "</b> in for " + L1 + ", then split it into " + d + " equal groups.",
+        steps: ["Replace " + L1 + " with " + v + ": " + v + " ÷ " + d,
+                "Divide: " + v + " ÷ " + d + " = <b>" + ans + "</b>"] };
     }
     if (g === 4) { v = rint(2, 9); ans = 2 * v;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + " + " + L1 + "</span>?", choices: numChoices(ans),
-        hint1: L1 + " + " + L1 + " is <b>two groups</b> of " + v + ".", hint2: v + " + " + v + " = ?" };
+        nudge: L1 + " + " + L1 + " is two of the same value, and each is <b>" + v + "</b>.",
+        steps: ["Each " + L1 + " is worth " + v + ", so " + v + " + " + v,
+                "Add: " + v + " + " + v + " = <b>" + ans + "</b>"] };
     }
     if (g === 6) { v = rint(2, 7); ans = v * v;
       return { concept: "Squares", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + "²</span>?", choices: numChoices(ans),
-        hint1: "<b>" + L1 + "²</b> means " + L1 + " × " + L1 + ".", hint2: v + " × " + v + " = ?" };
+        nudge: "<b>" + L1 + "²</b> means " + L1 + " × " + L1 + " (not " + L1 + " × 2).",
+        steps: [L1 + "² means <b>" + L1 + " × " + L1 + "</b>",
+                "Put in " + L1 + " = " + v + ": " + v + " × " + v,
+                "Multiply: " + v + " × " + v + " = <b>" + ans + "</b>"] };
     }
     if (g === 7) { c = rint(2, 3); v = rint(2, 6); b = rint(1, 5); ans = c * v + b;
       return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + " + " + b + "</span>?", choices: numChoices(ans),
-        hint1: "Multiply first: " + c + " × " + v + ", then add " + b + ".", hint2: (c * v) + " + " + b + " = ?" };
+        nudge: "two steps: multiply " + c + " × " + L1 + " first, then add " + b + ".",
+        steps: ["Replace " + L1 + " with " + v + ": " + c + " × " + v + " + " + b,
+                "Multiply first: " + c + " × " + v + " = " + (c * v),
+                "Then add: " + (c * v) + " + " + b + " = <b>" + ans + "</b>"] };
     }
     c = rint(2, 4); v = rint(2, 8); ans = c * v;
     return { concept: "Evaluating expressions", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + " · " + L1 + "</span>?", choices: numChoices(ans),
-      hint1: c + " · " + L1 + " means " + c + " × " + L1 + ".", hint2: c + " × " + v + " = ?" };
+      nudge: "the dot means multiply, so " + c + " · " + L1 + " = " + c + " × " + L1 + ".",
+      steps: [c + " · " + L1 + " means <b>" + c + " × " + L1 + "</b>",
+              "Put in " + L1 + " = " + v + ": " + c + " × " + v,
+              "Multiply: " + c + " × " + v + " = <b>" + ans + "</b>"] };
   }
 
   function qHard() {
     var g = diffGen(2, null, 7), L1 = pick(LETTERS), c, v, b, ans, c1, c2, s;
     if (g === 0) { c = rint(2, 4); v = rint(2, 8); b = rint(2, 9); ans = c * v + b;
       return { concept: "Evaluate (order of ops)", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + " + " + b + "</span>?", choices: numChoices(ans),
-        hint1: "Do <b>×</b> before <b>+</b>: first " + c + " × " + v + ", then add " + b + ".", hint2: c + "×" + v + " = " + (c * v) + ", then + " + b + " = ?" };
+        nudge: "order of operations: do × before +, so start with " + c + " × " + v + ".",
+        steps: ["Replace " + L1 + " with " + v + ": " + c + " × " + v + " + " + b,
+                "Multiply first: " + c + " × " + v + " = " + (c * v),
+                "Then add: " + (c * v) + " + " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 1) { c1 = rint(2, 6); c2 = rint(2, 6); s = c1 + c2;
       return { concept: "Combine like terms", prompt: "Combine: <span class='ex'>" + c1 + L1 + " + " + c2 + L1 + "</span> = ?",
         choices: symChoices(s + L1, [(s + 1) + L1, (c1 * c2) + L1, String(s), (s - 1) + L1]),
-        hint1: "Add the numbers in front; the " + L1 + " stays: (" + c1 + " + " + c2 + ")" + L1 + ".", hint2: c1 + " + " + c2 + " = " + s + ", so <b>" + s + L1 + "</b>." };
+        nudge: "both terms have the same letter " + L1 + ", so just add the numbers in front.",
+        steps: ["Both terms use the same variable " + L1,
+                "Add the numbers in front: " + c1 + " + " + c2 + " = " + s,
+                "Keep the " + L1 + ": <b>" + s + L1 + "</b>"] };
     }
     if (g === 2) { c = rint(2, 4); v = rint(3, 8); b = rint(2, c * v - 1); ans = c * v - b;
       return { concept: "Evaluate (order of ops)", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + " − " + b + "</span>?", choices: numChoices(ans),
-        hint1: "First " + c + " × " + v + ", then subtract " + b + ".", hint2: (c * v) + " − " + b + " = ?" };
+        nudge: "multiply " + c + " × " + v + " first, then subtract " + b + ".",
+        steps: ["Replace " + L1 + " with " + v + ": " + c + " × " + v + " − " + b,
+                "Multiply first: " + c + " × " + v + " = " + (c * v),
+                "Then subtract: " + (c * v) + " − " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 3) { c1 = rint(4, 9); c2 = rint(1, c1 - 1); s = c1 - c2;
       return { concept: "Combine like terms", prompt: "Simplify: <span class='ex'>" + c1 + L1 + " − " + c2 + L1 + "</span> = ?",
         choices: symChoices(s + L1, [(s + 1) + L1, (s - 1 < 0 ? 0 : s - 1) + L1, String(s), (c1 + c2) + L1]),
-        hint1: "Subtract the front numbers; " + L1 + " stays: (" + c1 + " − " + c2 + ")" + L1 + ".", hint2: c1 + " − " + c2 + " = " + s + ", so <b>" + s + L1 + "</b>." };
+        nudge: "same letter " + L1 + " on both terms, so subtract the numbers in front.",
+        steps: ["Both terms use the same variable " + L1,
+                "Subtract the numbers in front: " + c1 + " − " + c2 + " = " + s,
+                "Keep the " + L1 + ": <b>" + s + L1 + "</b>"] };
     }
     if (g === 4) { c1 = rint(2, 3); c2 = rint(2, 3); v = rint(2, 6); ans = (c1 + c2) * v;
       return { concept: "Combine, then evaluate", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c1 + L1 + " + " + c2 + L1 + "</span>?", choices: numChoices(ans),
-        hint1: "First combine: " + c1 + L1 + " + " + c2 + L1 + " = " + (c1 + c2) + L1 + ". Then put in " + v + ".", hint2: (c1 + c2) + " × " + v + " = ?" };
+        nudge: "first combine the " + L1 + " terms, then put in <b>" + v + "</b>.",
+        steps: ["Combine like terms: " + c1 + L1 + " + " + c2 + L1 + " = " + (c1 + c2) + L1,
+                "Put in " + L1 + " = " + v + ": " + (c1 + c2) + " × " + v,
+                "Multiply: " + (c1 + c2) + " × " + v + " = <b>" + ans + "</b>"] };
     }
     if (g === 6) { v = rint(4, 9); ans = v * v;
       return { concept: "Squares", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + L1 + "²</span>?", choices: numChoices(ans),
-        hint1: "<b>" + L1 + "²</b> means " + L1 + " × " + L1 + " (not " + L1 + " × 2).", hint2: v + " × " + v + " = ?" };
+        nudge: "<b>" + L1 + "²</b> means " + L1 + " × " + L1 + ", not " + L1 + " × 2.",
+        steps: [L1 + "² means <b>" + L1 + " × " + L1 + "</b>",
+                "Put in " + L1 + " = " + v + ": " + v + " × " + v,
+                "Multiply: " + v + " × " + v + " = <b>" + ans + "</b>"] };
     }
     c = rint(2, 3); v = rint(2, 6); b = rint(2, 8); ans = c * v + c * b;  // c(v+b) flavour
     return { concept: "Evaluate (order of ops)", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + "(" + L1 + " + " + b + ")</span>?", choices: numChoices(ans),
-      hint1: "First add inside: " + v + " + " + b + " = " + (v + b) + ". Then × " + c + ".", hint2: c + " × " + (v + b) + " = ?" };
+      nudge: "do the inside of the parentheses first: " + v + " + " + b + ".",
+      steps: ["Replace " + L1 + " with " + v + ": " + c + " × (" + v + " + " + b + ")",
+              "Add inside the parentheses: " + v + " + " + b + " = " + (v + b),
+              "Multiply: " + c + " × " + (v + b) + " = <b>" + ans + "</b>"] };
   }
 
   /* ---------- question sheet UI ---------- */
@@ -1088,6 +1165,25 @@
   }
   function closeSheet() { sheet.classList.remove("show"); }
 
+  /* ---------- miss explanations ----------
+     On a miss we coach the player instead of just flashing a hint:
+       • 1st miss  -> a warm nudge toward the FIRST step (q.nudge)
+       • 2nd miss  -> the full, number-specific worked solution (q.steps)
+                      + we reveal/allow the correct answer so nobody is stuck. */
+  var MISS_LEADS = ["Not quite —", "So close —", "Almost there —", "Good try —", "Oops —"];
+  var REVEAL_LEADS = ["No worries — let's solve it together:", "Here's the step-by-step:",
+                      "Let's walk through it:", "Watch how it works:"];
+  function explainHTML(q, full) {
+    if (!full) return '<span class="lead">' + pick(MISS_LEADS) + " " + q.nudge + "</span>";
+    var html = '<span class="lead">' + pick(REVEAL_LEADS) + "</span><ol class=\"steps\">";
+    for (var i = 0; i < q.steps.length; i++) {
+      var last = i === q.steps.length - 1;
+      html += "<li" + (last ? ' class="final"' : "") + '><span class="n">' +
+              (last ? "✓" : (i + 1)) + '</span><span class="t">' + q.steps[i] + "</span></li>";
+    }
+    return html + '</ol><span class="tapline">👉 now tap the glowing answer</span>';
+  }
+
   function answer(c, btn) {
     if (S.phase !== "question" || S.qLock) return;
     var q = S.q;
@@ -1102,9 +1198,10 @@
     } else {
       btn.classList.add("wrong"); btn.disabled = true; sWrong();
       q.tries++;
-      qFeedback.className = "feedback bad";
-      qFeedback.innerHTML = (q.tries >= 2 ? q.hint2 : q.hint1) + (q.tries >= 2 ? " &nbsp;👉 tap the glowing answer." : "");
-      if (q.tries >= 2) {
+      var full = q.tries >= 2;
+      qFeedback.className = full ? "feedback solve" : "feedback bad";
+      qFeedback.innerHTML = explainHTML(q, full);
+      if (full) {
         var btns = qChoices.querySelectorAll("button");
         btns.forEach(function (b) { if (b._c.correct) b.classList.add("reveal"); });
       }
