@@ -53,7 +53,7 @@ export type ChoiceKind = 'assign' | 'addx' | 'subx' | 'addc' | 'subc';
 
 interface Choice {
   kind: ChoiceKind;
-  // addx/subx → the multiple of x (1..3); addc/subc → the constant (1..6);
+  // addx/subx → the multiple of x (1..5); addc/subc → the constant (1..8);
   // assign → the digit value (4..9).
   val: number;
   color: string;
@@ -328,7 +328,7 @@ export class GateRunner {
     this.bossZ = ASSIGN_Z + BOSS_GAP_Z;
     // Tuned for the new scale: your value is a·x + b (low hundreds at best), so
     // the boss takes a modest, survivable bite.
-    this.bossPower = randInt(30, 65);
+    this.bossPower = randInt(22, 52);
   }
 
   // Generate the gate rows for a run. Each operation row belongs to one of two
@@ -371,12 +371,12 @@ export class GateRunner {
   // are ~40% trap (a healthy "+kx" vs. a "−kx" monster to dodge).
   private buildCoefRow(i: number): [Choice, Choice] {
     if (i > 1 && Math.random() < 0.4) {
-      const good = addxChoice(randInt(2, 3));
+      const good = addxChoice(randInt(3, 5));
       const bad = subxChoice(randInt(1, 3));
       return Math.random() < 0.5 ? [good, bad] : [bad, good];
     }
-    const small = randInt(1, 2);
-    const big = randInt(small + 1, 3);
+    const small = randInt(2, 3);
+    const big = randInt(small + 1, 5);
     return Math.random() < 0.5 ? [addxChoice(small), addxChoice(big)] : [addxChoice(big), addxChoice(small)];
   }
 
@@ -384,12 +384,12 @@ export class GateRunner {
   // slightly bigger numbers so the constant term reads clearly in the bubble.
   private buildConstRow(i: number): [Choice, Choice] {
     if (i > 1 && Math.random() < 0.4) {
-      const good = addcChoice(randInt(3, 5));
+      const good = addcChoice(randInt(4, 7));
       const bad = subcChoice(randInt(1, 3));
       return Math.random() < 0.5 ? [good, bad] : [bad, good];
     }
-    const small = randInt(2, 3);
-    const big = randInt(small + 1, 6);
+    const small = randInt(3, 4);
+    const big = randInt(small + 1, 8);
     return Math.random() < 0.5 ? [addcChoice(small), addcChoice(big)] : [addcChoice(big), addcChoice(small)];
   }
 

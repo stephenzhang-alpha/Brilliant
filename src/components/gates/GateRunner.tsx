@@ -199,17 +199,39 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
     setPickedCorrect(correct);
   }, []);
 
+  // Replay: reset the engine to a fresh run and clear the finish-card state so
+  // the completion overlay closes and the run starts over. Finishing again
+  // re-fires engine.onComplete → onFinish, so the host re-banks the score (the
+  // overall keeps the best per game, so a stronger replay counts). The rAF loop
+  // re-syncs status/phase from the engine, but we mirror them here too so the
+  // overlay clears in the same render rather than a frame later.
+  const handlePlayAgain = useCallback(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.reset();
+    engine.start();
+    setStatus('running');
+    setPhase('run');
+    setTeachData(null);
+    setEvalData(null);
+    setPicked(null);
+    setPickedCorrect(null);
+    setRecap(null);
+    setFinalCount(0);
+    setBestCombo(0);
+  }, []);
+
   const headline =
     finalCount >= 1000
       ? 'JACKPOT!'
-      : finalCount >= 125
+      : finalCount >= 210
         ? 'Incredible!'
-        : finalCount >= 85
+        : finalCount >= 145
           ? 'Huge run!'
-          : finalCount >= 50
+          : finalCount >= 80
             ? 'Nice run!'
             : 'Finish!';
-  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 125 ? '🚀' : '🎉';
+  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 210 ? '🚀' : '🎉';
 
   return (
     <div className="w-full max-w-[430px] mx-auto">
@@ -399,6 +421,12 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
                 className="mt-5 w-full bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-xl transition-colors"
               >
                 {nextLabel}
+              </button>
+              <button
+                onClick={handlePlayAgain}
+                className="mt-2.5 w-full bg-surface-light hover:bg-primary/10 text-primary font-display font-bold px-6 py-3 rounded-xl border-2 border-primary/20 transition-colors"
+              >
+                ↻ Play again
               </button>
             </div>
           </div>

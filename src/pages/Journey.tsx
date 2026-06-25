@@ -169,7 +169,7 @@ export function JourneyPage() {
         className="journey-bar sticky top-0 z-30 flex items-center justify-between gap-2 px-2 sm:px-3 py-2 bg-black/25 backdrop-blur-md"
       >
         <div className="flex items-center gap-0.5 sm:gap-1 min-w-0 overflow-x-auto no-scrollbar">
-          <span className="text-xl mr-0.5 sm:mr-1 animate-bob" aria-hidden>🦖</span>
+          <span className="text-xl mr-0.5 sm:mr-1 animate-bob" aria-hidden>🧮</span>
           {tab('dino', 'Dino')}
           {tab('gates', 'Gates', !gatesUnlocked)}
           {tab('tower', 'Pull the Pin', !towerUnlocked)}

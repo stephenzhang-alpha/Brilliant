@@ -72,7 +72,7 @@ export function GamesLayout({ children }: { children: ReactNode }) {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Link to="/" className="flex items-center gap-2 shrink-0">
-              <span aria-hidden className="text-2xl animate-bob">🦖</span>
+              <span aria-hidden className="text-2xl animate-bob">🧮</span>
               <span className="hidden md:inline font-display font-bold text-xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                 Algebra Quest
               </span>

@@ -181,8 +181,8 @@
 
   <div class="legend" id="help">
     <span class="key"><b class="g">💎</b>&nbsp;→ hero</span>
-    <span class="key"><b class="r">🔥 🪨</b>&nbsp;→ drain</span>
-    <span class="key">tap a pin · answer · pull</span>
+    <span class="key"><b class="r">🔥 🪨</b>&nbsp;→ drain (1 each)</span>
+    <span class="key">pull EVERY pin to clear</span>
   </div>
 
   <div class="scene" id="scene">
@@ -234,13 +234,20 @@
               cyan:"#06b6d4", amber:"#f59e0b", green:"#22c55e", greenD:"#15803d", red:"#ef4444" };
 
   /* ---- level layouts (authored top -> bottom; order matters) ----
-     Each station: type 'gem' | 'hazard' | 'drain'. A released payload
-     falls down the central shaft; it is caught by the CLOSEST OPEN drain
-     below it, otherwise it reaches the hero. Solvable orders exist for all. */
+     Each station: type 'gem' | 'hazard' | 'drain'. A released payload falls down
+     the central shaft and is caught by the CLOSEST OPEN, NOT-FULL drain below it,
+     otherwise it reaches the hero.  NEW RULES (capacity + pull-all):
+       • every drain has capacity 1 — it traps EXACTLY ONE hazard then turns FULL;
+         a later hazard skips a full drain and continues down (to the next empty
+         drain, or the hero → which just shakes + resets the level, forgiving);
+       • a level clears only once EVERY pin has been pulled with no hazard hitting
+         the hero, so each level has at least as many drains as hazards and a valid
+         pull order (a verified solving order is noted on each level below). */
   var LEVELS = [
     {
       name: "Level 1 / 3",
-      intro: "Open the drain, then drop the 🔥 in it. Send the 💎 to your hero!",
+      intro: "Each drain traps just ONE 🔥. Grab the 💎, open the drain, then drop the 🔥 in — and pull EVERY pin to clear!",
+      // 1 gem · 1 hazard · 1 drain  →  solve: 💎, drain, 🔥
       stations: [
         { type:"gem",    emoji:"💎", side:-1 },
         { type:"hazard", emoji:"🔥", side: 1 },
@@ -249,7 +256,8 @@
     },
     {
       name: "Level 2 / 3",
-      intro: "Two gems, two hazards. Drop the gems first, then open each drain before its hazard.",
+      intro: "Two fires, two drains — but each drain holds only ONE. Grab both 💎 first, then give each 🔥 its own drain.",
+      // 2 gems · 2 hazards · 2 drains  →  solve: 💎, 💎, drain, 🔥, drain, 🪨
       stations: [
         { type:"gem",    emoji:"💎", side:-1 },
         { type:"hazard", emoji:"🔥", side: 1 },
@@ -261,16 +269,17 @@
     },
     {
       name: "Level 3 / 3",
-      intro: "Trickier! Each gem is doomed once a drain below it opens — grab gems first, then drain the hazards.",
+      intro: "Trickiest! A 💎 is lost if a drain below it is open, so grab every 💎 first. Each drain traps just ONE hazard — then pull every pin to win!",
+      // 3 gems · 2 hazards · 3 drains (one spare)  →  solve: 💎, 💎, 💎, drain, 🔥, drain, 🪨, drain
       stations: [
         { type:"hazard", emoji:"🔥", side: 1 },
         { type:"gem",    emoji:"💎", side:-1 },
         { type:"drain",              side: 1 },
+        { type:"gem",    emoji:"💎", side:-1 },
         { type:"hazard", emoji:"🪨", side: 1 },
+        { type:"drain",              side:-1 },
         { type:"gem",    emoji:"💎", side:-1 },
-        { type:"hazard", emoji:"🔥", side: 1 },
-        { type:"gem",    emoji:"💎", side:-1 },
-        { type:"drain",              side:-1 }
+        { type:"drain",              side: 1 }
       ]
     }
   ];
@@ -524,20 +533,30 @@
   }
 
   function drawDrain(st) {
-    var r = st.boxR;
-    // pit / chute
-    ctx.fillStyle = st.open ? "rgba(6,182,212,.30)" : "rgba(10,6,30,.4)";
+    var r = st.boxR, full = st.full, open = st.open && !full;
+    // pit / chute — a FULL drain reads as a clogged, greyed-out "used" hole
+    ctx.fillStyle = full ? "rgba(96,86,112,.5)" : (open ? "rgba(6,182,212,.30)" : "rgba(10,6,30,.4)");
     rr(r.x, r.y, r.w, r.h, 12); ctx.fill();
-    ctx.strokeStyle = st.open ? "rgba(103,232,249,.85)" : "rgba(255,255,255,.32)";
+    ctx.strokeStyle = full ? "rgba(186,176,202,.7)" : (open ? "rgba(103,232,249,.85)" : "rgba(255,255,255,.32)");
     ctx.lineWidth = 2; rr(r.x, r.y, r.w, r.h, 12); ctx.stroke();
+    if (full) {
+      // the hazard it trapped, dimmed, behind a "no-entry" cap so it clearly can't take more
+      ctx.globalAlpha = 0.8; emoji(st.caughtEmoji || "🔥", st.boxX, st.y - r.h * 0.04, L.boxH * 0.44); ctx.globalAlpha = 1;
+      ctx.strokeStyle = "rgba(230,226,240,.9)"; ctx.lineWidth = 2.4; ctx.lineCap = "round";
+      var cr = L.boxH * 0.32;
+      ctx.beginPath(); ctx.arc(st.boxX, st.y, cr, 0, 6.2832); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(st.boxX - cr * 0.72, st.y + cr * 0.72); ctx.lineTo(st.boxX + cr * 0.72, st.y - cr * 0.72); ctx.stroke();
+      if (L.showChips) label("FULL", st.boxX, r.y + r.h + 9, 10, "#e6e2f0");
+      return;
+    }
     // mouth chevrons
-    ctx.strokeStyle = st.open ? PAL.cyan : "rgba(255,255,255,.5)"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    ctx.strokeStyle = open ? PAL.cyan : "rgba(255,255,255,.5)"; ctx.lineWidth = 3; ctx.lineCap = "round";
     for (var k = 0; k < 2; k++) {
       var yy = st.y - 5 + k * 8;
       ctx.beginPath(); ctx.moveTo(st.boxX - 11, yy - 4); ctx.lineTo(st.boxX, yy + 3); ctx.lineTo(st.boxX + 11, yy - 4); ctx.stroke();
     }
-    emoji(st.open ? "🌀" : "🚰", st.boxX, st.y - r.h * 0.02, L.boxH * 0.5);
-    if (L.showChips) label(st.open ? "OPEN" : "DRAIN", st.boxX, r.y + r.h + 9, 10, st.open ? "#a5f3fc" : "rgba(255,255,255,.72)");
+    emoji(open ? "🌀" : "🚰", st.boxX, st.y - r.h * 0.02, L.boxH * 0.5);
+    if (L.showChips) label(open ? "OPEN" : "DRAIN", st.boxX, r.y + r.h + 9, 10, open ? "#a5f3fc" : "rgba(255,255,255,.72)");
   }
 
   /* A locking PIN/BOLT, rendered PERPENDICULAR to its feed pipe: the pipe runs
@@ -712,10 +731,12 @@
 
   /* ---------- routing model (deterministic) ---------- */
   function destOf(st) {
+    // closest OPEN, NOT-FULL drain below the station (a full/used drain is skipped,
+    // so its payload continues down to the next empty drain or the hero)
     var best = null;
     for (var i = 0; i < S.stations.length; i++) {
       var d = S.stations[i];
-      if (d.type === "drain" && d.open && d.y > st.y) { if (!best || d.y < best.y) best = d; }
+      if (d.type === "drain" && d.open && !d.full && d.y > st.y) { if (!best || d.y < best.y) best = d; }
     }
     return best ? { type: "drain", drain: best } : { type: "hero" };
   }
@@ -807,7 +828,7 @@
     var def = LEVELS[idx];
     S.stations = def.stations.map(function (s) {
       return { type: s.type, emoji: s.emoji || "", side: s.side, pulled: false, pulling: false,
-        pullT: 0, released: false, open: false };
+        pullT: 0, released: false, open: false, full: false, caughtEmoji: "" };
     });
     S.levelGem = 0; S.levelBonus = 0; S.resolved = 0; S.selected = null; S.q = null;
     S.phase = "intro"; S.hero.mood = "idle"; tokens.length = 0;
@@ -818,6 +839,10 @@
     setTimeout(function () { if (S.phase === "intro") S.phase = "idle"; }, retry ? 1500 : 1850);
   }
 
+  // A level clears ONLY when every pin has been pulled with no hazard reaching the
+  // hero. S.resolved counts pins whose payload landed safely (drain opened, gem
+  // delivered/lost, or hazard trapped); a hazard that hits the hero resets the level
+  // instead of incrementing it. So resolved === station count ⟺ all pins pulled, safe.
   function checkComplete() {
     if (S.resolved >= S.stations.length) { clearLevel(); return true; }
     return false;
@@ -901,9 +926,11 @@
       S.resolved++; if (!checkComplete()) restIdle();
     } else { // hazard
       if (tk.dest.type === "drain") {
+        var dr = tk.dest.drain;
+        dr.full = true; dr.caughtEmoji = tk.emoji;   // capacity 1: this drain is now used up
         sDrain();
-        burst(tk.dest.drain.boxX, tk.dest.drain.y, 16, { colors: ["#67e8f9", "#06b6d4"], speed: 150, spread: 3, life: 0.7, g: 120 });
-        floatText("safe!", tk.dest.drain.boxX, tk.dest.drain.y - 14, "#a5f3fc", 16);
+        burst(dr.boxX, dr.y, 16, { colors: ["#67e8f9", "#06b6d4"], speed: 150, spread: 3, life: 0.7, g: 120 });
+        floatText("trapped!", dr.boxX, dr.y - 14, "#a5f3fc", 16);
         S.resolved++; if (!checkComplete()) restIdle();
       } else { // hit the hero
         burst(L.heroX, L.heroCatchY, 24, { colors: ["#ef4444", "#f59e0b", "#fb923c"], speed: 260, spread: 3, life: 0.9 });
@@ -1134,14 +1161,14 @@
 
   /* ---------- question sheet UI ---------- */
   function ctxFor(st) {
-    if (st.type === "drain") return { html: "🔧 Pull to <b>open this drain</b> 🌀 — any 🔥/🪨 that falls past it drops away <b>safely</b>.", tone: "cyan" };
+    if (st.type === "drain") return { html: "🔧 Open this drain 🌀 — it traps <b>just one</b> 🔥/🪨, then it's <b>FULL</b>.", tone: "cyan" };
     var dest = destOf(st);
     if (st.type === "gem") return dest.type === "hero"
       ? { html: "💎 <b>→ 🦸 hero</b> — the gem rolls home for <b>+" + GEM + "</b>!", tone: "green" }
-      : { html: "💎 <b>→ 🌀 drain</b> — a drain below is open, so this gem would be <b>lost</b>. (You can still pull it.)", tone: "amber" };
+      : { html: "💎 <b>→ 🌀 drain</b> — an open drain below would <b>lose</b> this gem. (You can still pull it.)", tone: "amber" };
     return dest.type === "drain"
-      ? { html: st.emoji + " <b>→ 🌀 drain</b> — <b>safe!</b> It drops away from your hero.", tone: "green" }
-      : { html: "⚠️ " + st.emoji + " <b>→ 🦸 hero</b> — <b>DANGER!</b> Open its drain first, or your hero gets hit (level resets).", tone: "red" };
+      ? { html: st.emoji + " <b>→ 🌀 drain</b> — <b>safe!</b> An empty drain below traps it.", tone: "green" }
+      : { html: "⚠️ " + st.emoji + " <b>→ 🦸 hero</b> — <b>DANGER!</b> No empty drain below — open one first or the level resets.", tone: "red" };
   }
 
   function openQuestion(st) {
