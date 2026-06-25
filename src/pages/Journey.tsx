@@ -41,7 +41,16 @@ export function JourneyPage() {
       gates: gatesRef,
       tower: towerRef,
     };
-    map[id].current?.scrollIntoView({ behavior: 'smooth' });
+    const el = map[id].current;
+    const root = scrollRef.current;
+    // Scroll the journey container directly (more reliable than scrollIntoView
+    // inside a fixed, scroll-snap container) so every "Next" button reliably
+    // sends the player down to the next game.
+    if (el && root) {
+      root.scrollTo({ top: el.offsetTop, behavior: 'smooth' });
+    } else {
+      el?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, []);
 
   // Track the in-view section so off-screen games can pause.

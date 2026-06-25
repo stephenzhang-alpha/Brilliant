@@ -64,13 +64,14 @@ export interface DeathOffer {
 }
 
 /**
- * One-time onboarding that introduces variables using the live score as the
- * concrete example:
- *   • 'lesson' — the dino is already running (no obstacles); explain that the
- *     live score & high score ARE variables (their values change).
- *   • 'quiz'   — a multiple-choice check; the player must answer correctly to
- *     unlock the real game.
- *   • null     — lesson done (or already seen): play normally, with obstacles.
+ * One-time onboarding shown as a centered modal pop-up BEFORE the real game
+ * begins. The dino free-runs (no obstacles) behind the dimmed pop-up so the
+ * scene stays alive, and the live score & high score are used as the two
+ * concrete example variables (the player's first lesson in algebra):
+ *   • 'lesson' — explain what a variable is, pointing at the live score &
+ *     high score (their values change as you play).
+ *   • 'quiz'   — a must-pass multiple-choice check; answer correctly to start.
+ *   • null     — onboarding done (or already seen): play normally, obstacles on.
  */
 type TutorialStep = 'lesson' | 'quiz' | null;
 
@@ -306,8 +307,8 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
 
   const wrongOption = wrongPick ? VARIABLE_OPTIONS.find((o) => o.id === wrongPick) : null;
 
-  // The single below-canvas pop-up walks through three phases without ever
-  // covering the running game: explain → check → celebrate.
+  // The centered modal pop-up walks through three phases over the dimmed,
+  // still-running scene: explain → check → celebrate, then starts the game.
   const tutorialPhase: 'lesson' | 'quiz' | 'done' = quizDone
     ? 'done'
     : tutorialStep === 'quiz'
@@ -333,15 +334,6 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
             <div className="bg-black/55 backdrop-blur-sm rounded-xl px-6 py-4 text-center">
               <p className="text-white font-semibold text-lg">Press Space / Tap to start</p>
               <p className="text-white/70 text-sm mt-1">↑ or tap to jump · ↓ to duck</p>
-            </div>
-          </div>
-        )}
-
-        {/* Callout pointing at the live score / high-score HUD during the lesson. */}
-        {tutorialStep !== null && !quizDone && (
-          <div className="absolute right-2 pointer-events-none" style={{ top: '11%' }}>
-            <div className="bg-amber text-[#2a2350] text-[11px] font-extrabold rounded-full px-2.5 py-1 shadow-lg animate-bob flex items-center gap-1">
-              <span aria-hidden>↑</span> these are variables
             </div>
           </div>
         )}
@@ -395,38 +387,50 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
         )}
       </div>
 
-      {/* --- Variables onboarding: ONE tidy pop-up BELOW the running game --- */}
+      {/* --- Variables intro: a centered modal pop-up shown BEFORE the game ---
+          It's the first thing a new player sees. The dino free-runs (no
+          obstacles) behind the dimmed scrim so the scene stays alive, and the
+          live score / high score are the two concrete example variables.
+          Obstacles only switch on once the must-pass quiz is answered. */}
       {tutorialStep !== null && (
-        <div className="mt-4 animate-fadein">
-          <div className="relative rounded-2xl border border-primary/15 bg-surface shadow-xl shadow-primary/20">
-            {/* Speech-bubble tail — points up at the dino still running above. */}
-            <div
-              aria-hidden
-              className="absolute -top-1.5 left-8 h-3 w-3 rotate-45 rounded-[2px] bg-primary"
-            />
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fadein"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="dino-var-title"
+        >
+          {/* Dim + blur the scene, but keep the running dino alive behind it. */}
+          <div className="absolute inset-0 bg-[#2a2350]/55 backdrop-blur-sm" aria-hidden />
 
+          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface shadow-2xl shadow-primary/40 ring-1 ring-white/50">
             {/* Header ribbon */}
-            <div className="flex items-center gap-3 rounded-t-2xl bg-gradient-to-r from-primary via-accent to-cyan px-5 py-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/20 text-xl" aria-hidden>
+            <div className="flex items-center gap-3 bg-gradient-to-r from-primary via-accent to-cyan px-5 py-4 sm:px-6">
+              <span
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20 text-2xl animate-bob"
+                aria-hidden
+              >
                 🔢
               </span>
               <div className="min-w-0">
-                <p className="font-display text-lg font-extrabold leading-tight text-white">
+                <span className="inline-block rounded-full bg-white/25 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-white">
+                  Stage 1 · Algebra
+                </span>
+                <p
+                  id="dino-var-title"
+                  className="font-display text-xl font-extrabold leading-tight text-white"
+                >
                   Meet your first variable
-                </p>
-                <p className="text-xs font-semibold text-white/80">
-                  Watch the numbers on your game change in real time
                 </p>
               </div>
             </div>
 
-            <div className="p-5">
+            <div className="p-5 sm:p-6">
               {/* Live readouts of the two example variables — always on screen,
                   updating in real time, so the lesson can point right at them. */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border-2 border-primary/25 bg-primary/5 px-3 py-2.5">
+                <div className="rounded-2xl border-2 border-primary/25 bg-primary/5 px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-display text-sm font-bold text-primary">score</span>
+                    <span className="font-mono text-sm font-bold text-primary">score</span>
                     <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-primary">
                       variable
                     </span>
@@ -436,9 +440,9 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
                     <span className="text-xs font-semibold text-success">▲ climbing</span>
                   </div>
                 </div>
-                <div className="rounded-xl border-2 border-accent/25 bg-accent/5 px-3 py-2.5">
+                <div className="rounded-2xl border-2 border-accent/25 bg-accent/5 px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-display text-sm font-bold text-accent">highScore</span>
+                    <span className="font-mono text-sm font-bold text-accent">highScore</span>
                     <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-accent">
                       variable
                     </span>
@@ -456,17 +460,18 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
               <div key={tutorialPhase} className="animate-fadein">
                 {tutorialPhase === 'lesson' && (
                   <>
-                    <p className="mt-4 text-sm leading-relaxed text-text-muted">
-                      A <span className="font-bold text-primary">variable</span> is a{' '}
-                      <span className="font-semibold text-text">named quantity whose value can change</span> as you
-                      play. Up in the game, <span className="font-mono font-bold text-primary">score</span> climbs
+                    <p className="mt-4 text-sm leading-relaxed text-text-muted sm:text-base">
+                      Welcome to algebra! A <span className="font-bold text-primary">variable</span> is a{' '}
+                      <span className="font-semibold text-text">named quantity whose value can change</span>. Your
+                      game already has two: <span className="font-mono font-bold text-primary">score</span> climbs
                       every step your dino runs, and{' '}
-                      <span className="font-mono font-bold text-accent">highScore</span> changes the moment you beat
-                      your record. Same name, new value — that&apos;s a variable!
+                      <span className="font-mono font-bold text-accent">highScore</span> jumps up the moment you beat
+                      your record. Same name, new value — that&apos;s a variable! Watch the numbers above change as
+                      your dino runs.
                     </p>
                     <button
                       onClick={onLessonNext}
-                      className="btn-pop mt-4 rounded-xl bg-primary px-7 py-2.5 font-display font-bold text-white"
+                      className="btn-pop mt-5 w-full rounded-2xl bg-primary px-7 py-3 font-display text-lg font-bold text-white sm:w-auto"
                     >
                       Got it — quiz me! →
                     </button>
@@ -475,7 +480,7 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
 
                 {tutorialPhase === 'quiz' && (
                   <>
-                    <h4 className="mt-4 flex items-center gap-2 font-display text-lg font-extrabold text-text">
+                    <h4 className="mt-5 flex items-center gap-2 font-display text-lg font-extrabold text-text">
                       <span aria-hidden>🎯</span> {VARIABLE_QUESTION}
                     </h4>
                     <p className="mt-1 text-sm text-text-muted">
@@ -519,20 +524,20 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
                 )}
 
                 {tutorialPhase === 'done' && (
-                  <div className="mt-4 text-center">
-                    <p className="text-3xl" aria-hidden>🎉</p>
+                  <div className="mt-5 text-center">
+                    <p className="text-4xl" aria-hidden>🎉</p>
                     <h4 className="mt-1 font-display text-xl font-extrabold text-text">
-                      Yes! Your score is a variable.
+                      Yes! <span className="font-mono text-primary">score</span> is a variable.
                     </h4>
-                    <p className="mx-auto mt-1.5 max-w-md text-sm text-text-muted">
-                      Its value keeps changing as you play — exactly what a variable is. Now for the real run:
+                    <p className="mx-auto mt-1.5 max-w-sm text-sm text-text-muted">
+                      Its value keeps changing as you play — exactly what a variable is. Time for the real run:
                       the obstacles are coming, so get ready to jump!
                     </p>
                     <button
                       onClick={onFinish}
-                      className="btn-pop mt-4 rounded-2xl bg-primary px-9 py-3 font-display text-lg font-extrabold text-white animate-pulse"
+                      className="btn-pop mt-5 rounded-2xl bg-primary px-9 py-3.5 font-display text-lg font-extrabold text-white animate-pulse"
                     >
-                      ▶ Play for real!
+                      ▶ Start the game!
                     </button>
                   </div>
                 )}

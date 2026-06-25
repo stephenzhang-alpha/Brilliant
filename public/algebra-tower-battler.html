@@ -209,9 +209,13 @@
    *                  atb:victory {power:<number>} after 3 levels.
    * ============================================================= */
 
-  /* Scoring tuned so a full clear banks ~225-310 (matches the other two games).
-     6 gems x25 + 17 first-try x5 + 3 clears x25 = 310 on a flawless run. */
-  var GEM = 25, FIRST_TRY = 5, CLEAR_BONUS = 25;
+  /* Scoring tuned so a full clear is a SOLID contributor on par with the other
+     two games (overall = sum of each game's best run; ranks at 250/750/1500/3000).
+     Stations: 6 gems, 17 pin-pulls (all gated by a question), 3 level clears.
+     Flawless run: 6 gems x40 + 17 first-try x6 + 3 clears x40 = 240+102+120 = 462.
+     Even a clear with zero first-try bonuses still banks 240+120 = 360, so a full
+     clear always lands ~360-462 (comfortably in the ~300-500 target band). */
+  var GEM = 40, FIRST_TRY = 6, CLEAR_BONUS = 40;
   var PAL = { violet:"#7c3aed", violetD:"#6d28d9", violetL:"#a78bfa", pink:"#ec4899",
               cyan:"#06b6d4", amber:"#f59e0b", green:"#22c55e", greenD:"#15803d", red:"#ef4444" };
 
@@ -347,6 +351,7 @@
     var rowGap = n > 1 ? span / (n - 1) : span;
     L.rowGap = rowGap;
     L.boxH = clamp(Math.min(rowGap * 0.62, H * 0.072), 20, 50);
+    L.pipeR = clamp(L.boxH * 0.27, 7, 12);   // outer half-thickness of the feed pipes (stubs)
     L.showChips = rowGap >= (L.boxH + 26);   // only float the text destination chips when rows have clear room
     var hitH = Math.min(rowGap - 2, L.boxH + 22);
     if (hitH < L.boxH) hitH = L.boxH;
@@ -356,7 +361,8 @@
       st.shaftEdgeX = L.shaftX + st.side * (L.shaftW / 2);
       st.boxX = st.shaftEdgeX + st.side * (L.stubLen + L.boxW / 2);
       st.boxR = { x: st.boxX - L.boxW / 2, y: st.y - L.boxH / 2, w: L.boxW, h: L.boxH };
-      st.pinR = { x: st.shaftEdgeX + (st.side < 0 ? -38 : 8), y: st.y - 22, w: 46, h: 44 };
+      // the pin/bolt crosses the horizontal feed pipe at its midpoint (perpendicular to flow)
+      st.pinX = st.shaftEdgeX + st.side * (L.stubLen * 0.5);
       st.hitR = { x: Math.min(st.boxR.x, st.shaftEdgeX) - 8, y: st.y - hitH / 2,
                   w: Math.abs(st.boxX - st.shaftEdgeX) + L.boxW / 2 + 16, h: hitH };
     }
@@ -457,19 +463,34 @@
   /* ---------- contraption drawing ---------- */
   function drawShaft() {
     var top = L.topY - 20, bot = L.heroCatchY + 6;
-    ctx.fillStyle = "rgba(10,6,30,.34)";
-    rr(L.shaftX - L.shaftW / 2, top, L.shaftW, bot - top, L.shaftW / 2); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,.16)"; ctx.lineWidth = 2;
-    rr(L.shaftX - L.shaftW / 2, top, L.shaftW, bot - top, L.shaftW / 2); ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,.10)";
-    rr(L.shaftX - L.shaftW / 2 + 4, top + 4, L.shaftW * 0.28, bot - top - 8, L.shaftW * 0.14); ctx.fill();
+    var x = L.shaftX - L.shaftW / 2, w = L.shaftW, h = bot - top, r = w / 2;
+    // cylindrical body sheen (light runs across the width → reads as a round pipe)
+    var g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, "rgba(38,26,74,.62)"); g.addColorStop(0.2, "rgba(126,108,178,.5)");
+    g.addColorStop(0.5, "rgba(196,186,228,.42)"); g.addColorStop(0.8, "rgba(118,100,168,.5)");
+    g.addColorStop(1, "rgba(38,26,74,.62)");
+    ctx.fillStyle = g; rr(x, top, w, h, r); ctx.fill();
+    // recessed inner channel so falling payloads read against it
+    ctx.fillStyle = "rgba(10,6,30,.32)";
+    rr(x + w * 0.2, top + 3, w * 0.6, h - 6, w * 0.3); ctx.fill();
+    // rim + glossy highlight stripe
+    ctx.strokeStyle = "rgba(255,255,255,.24)"; ctx.lineWidth = 2; rr(x, top, w, h, r); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.18)";
+    rr(x + w * 0.15, top + 5, w * 0.12, h - 10, w * 0.06); ctx.fill();
   }
 
+  // A feed pipe (horizontal tube) carrying a chamber's payload into the shaft.
   function drawStub(st) {
     var x0 = st.shaftEdgeX, x1 = st.boxX - st.side * (L.boxW / 2), y = st.y;
-    ctx.fillStyle = "rgba(10,6,30,.30)";
-    var lx = Math.min(x0, x1), w = Math.abs(x1 - x0);
-    rr(lx, y - 9, w, 18, 7); ctx.fill();
+    var lx = Math.min(x0, x1), w = Math.abs(x1 - x0) + 1, pr = L.pipeR, ph = pr * 2, py = y - pr;
+    // cylindrical body sheen (light runs across the height → reads as a round tube)
+    var g = ctx.createLinearGradient(0, py, 0, py + ph);
+    g.addColorStop(0, "rgba(38,26,74,.6)"); g.addColorStop(0.24, "rgba(150,134,196,.6)");
+    g.addColorStop(0.5, "rgba(208,199,234,.55)"); g.addColorStop(0.78, "rgba(120,102,170,.6)");
+    g.addColorStop(1, "rgba(38,26,74,.6)");
+    ctx.fillStyle = g; rr(lx, py, w, ph, pr * 0.7); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,.22)"; ctx.lineWidth = 1.5; rr(lx, py, w, ph, pr * 0.7); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.2)"; rr(lx + 2, py + 2, w - 4, ph * 0.22, ph * 0.1); ctx.fill();
   }
 
   function drawChamber(st) {
@@ -505,22 +526,81 @@
     if (L.showChips) label(st.open ? "OPEN" : "DRAIN", st.boxX, r.y + r.h + 9, 10, st.open ? "#a5f3fc" : "rgba(255,255,255,.72)");
   }
 
+  /* A locking PIN/BOLT, rendered PERPENDICULAR to its feed pipe: the pipe runs
+     horizontally, so the bolt crosses it vertically (90°) and is pulled straight
+     UP (out along its own axis) to release the payload. Clean chrome look with a
+     grab ring on top, a shoulder collar resting on the pipe, and knurled grip. */
   function drawPin(st) {
-    var pull = st.pulling ? st.pullT : (st.pulled ? 1 : 0);
-    if (st.pulled && !st.pulling) return; // bolt gone
-    var x = st.shaftEdgeX, y = st.y, side = st.side;
-    var out = side * (6 + pull * 50);
-    ctx.save(); ctx.globalAlpha = 1 - pull * 0.85;
-    // idle pulse ring
-    if (!st.pulled && S.phase === "idle") {
-      var pr = 13 + Math.sin(now1 / 320 + st.y) * 2.4;
-      ctx.strokeStyle = "rgba(253,224,138,.55)"; ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(x + side * 16, y, pr, 0, 6.2832); ctx.stroke();
+    if (st.pulled && !st.pulling) return;           // bolt fully extracted — gone
+    var pull = st.pulling ? st.pullT : 0;
+    var cx = st.pinX, y = st.y, pr = L.pipeR;
+    var bw = clamp(pr * 1.1, 8, 13);                // bolt-rod width
+    var idle = (!st.pulled && S.phase === "idle");
+    var bob = idle ? Math.sin(now1 / 360 + st.y) * 2 : 0;
+    var pullDist = clamp(L.rowGap * 0.6, 26, 54);
+    var outY = -(pull * pullDist) + bob;            // slides UP, perpendicular to the (horizontal) pipe
+
+    // Bolt geometry. The rod ALWAYS crosses the pipe (rodTop above, rodBot below);
+    // the grab ring sits above. Ring size is bounded by the room to the row above
+    // AND to the scene top, so heads never clip off-canvas or crowd neighbours.
+    var protrudeTop = clamp(bw * 0.7, 5, 11);
+    var rodTop = -(pr + protrudeTop), rodBot = pr + 4;
+    var roomAbove = Math.min(L.rowGap - 2 * pr - 6, y - (pr + protrudeTop) - 3);
+    var ringR = clamp(Math.min(bw * 0.95, roomAbove * 0.5), 4.5, 9);
+    var ringCY = rodTop - ringR * 0.92;
+
+    ctx.save();
+    ctx.translate(cx, y + outY);
+    ctx.globalAlpha = 1 - pull * 0.8;
+
+    // "pull me" affordance: a pulsing glow ring on the handle, plus an up-chevron when there's headroom
+    if (idle) {
+      var pulse = 0.55 + Math.sin(now1 / 300 + st.y) * 0.3;
+      ctx.save();
+      ctx.globalAlpha = 0.5 * pulse; ctx.strokeStyle = "#fde68a"; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(0, ringCY, ringR + 5 + Math.sin(now1 / 300 + st.y) * 1.8, 0, 6.2832); ctx.stroke();
+      if (roomAbove > 12) {
+        ctx.globalAlpha = 0.7 * pulse; ctx.lineWidth = 2.4; ctx.lineCap = "round";
+        var chY = ringCY - ringR - 8;
+        ctx.beginPath(); ctx.moveTo(-5, chY + 4); ctx.lineTo(0, chY - 1); ctx.lineTo(5, chY + 4); ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.lineCap = "round"; ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 7;
-    ctx.beginPath(); ctx.moveTo(x - side * 7, y); ctx.lineTo(x + out + side * 12, y); ctx.stroke();
-    ctx.fillStyle = "#e2e8f0"; ctx.beginPath(); ctx.arc(x + out + side * 16, y, 9, 0, 6.2832); ctx.fill();
-    ctx.fillStyle = "#94a3b8"; ctx.beginPath(); ctx.arc(x + out + side * 16, y, 3.6, 0, 6.2832); ctx.fill();
+
+    // soft shadow cast on the pipe
+    ctx.save(); ctx.globalAlpha *= 0.22; ctx.fillStyle = "#000";
+    rr(-bw / 2 + 1.5, rodTop + 2, bw, rodBot - rodTop, bw * 0.45); ctx.fill(); ctx.restore();
+
+    // bolt rod — chrome cylinder (vertical sheen band reads as round metal)
+    var mg = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0);
+    mg.addColorStop(0, "#69727f"); mg.addColorStop(0.27, "#dde5ef"); mg.addColorStop(0.5, "#ffffff");
+    mg.addColorStop(0.64, "#c2ccd9"); mg.addColorStop(1, "#5b636d");
+    ctx.fillStyle = mg; rr(-bw / 2, rodTop, bw, rodBot - rodTop, bw * 0.42); ctx.fill();
+    ctx.strokeStyle = "rgba(36,26,68,.4)"; ctx.lineWidth = 1; rr(-bw / 2, rodTop, bw, rodBot - rodTop, bw * 0.42); ctx.stroke();
+
+    // shoulder collar resting on the pipe (the part you pull against)
+    var colW = bw + 6, colH = bw * 0.58, colY = -(pr + 1);
+    var cg = ctx.createLinearGradient(0, colY - colH / 2, 0, colY + colH / 2);
+    cg.addColorStop(0, "#eef3f9"); cg.addColorStop(1, "#9aa4b2");
+    ctx.fillStyle = cg; rr(-colW / 2, colY - colH / 2, colW, colH, colH * 0.45); ctx.fill();
+    ctx.strokeStyle = "rgba(36,26,68,.35)"; ctx.lineWidth = 1; rr(-colW / 2, colY - colH / 2, colW, colH, colH * 0.45); ctx.stroke();
+
+    // knurled grip ticks on the exposed rod just above the pipe
+    ctx.strokeStyle = "rgba(74,82,96,.5)"; ctx.lineWidth = 1;
+    for (var gI = 0; gI < 2; gI++) { var ky = -(pr) - 2 - gI * 3; ctx.beginPath(); ctx.moveTo(-bw * 0.28, ky); ctx.lineTo(bw * 0.28, ky + 1.3); ctx.stroke(); }
+
+    // bottom tip sheen
+    ctx.fillStyle = "rgba(255,255,255,.45)"; ctx.beginPath(); ctx.ellipse(-bw * 0.12, rodBot - 2.2, bw * 0.16, 1.5, 0, 0, 6.28); ctx.fill();
+
+    // grab ring / pull handle on top
+    ctx.lineCap = "round";
+    ctx.lineWidth = ringR * 0.62; ctx.strokeStyle = "#7e8794";
+    ctx.beginPath(); ctx.arc(0, ringCY, ringR, 0, 6.2832); ctx.stroke();
+    ctx.lineWidth = ringR * 0.3; ctx.strokeStyle = "#f3f7fb";      // top-left sheen
+    ctx.beginPath(); ctx.arc(0, ringCY, ringR, Math.PI * 1.04, Math.PI * 1.72); ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(30,22,52,.35)";     // inner hole edge
+    ctx.beginPath(); ctx.arc(0, ringCY, ringR - ringR * 0.31, 0, 6.2832); ctx.stroke();
+
     ctx.restore();
   }
 
@@ -778,7 +858,7 @@
   function beginPull(st, firstTry) {
     S.phase = "flow"; S.selected = st;
     st.pulling = true; st.pullT = 0; st.released = false; st.firstTry = firstTry;
-    burst(st.shaftEdgeX + st.side * 14, st.y, 14, { colors: ["#e2e8f0", "#cbd5e1", "#fde68a"], speed: 180, spread: 2.4, life: 0.5, g: 200, size: 4 });
+    burst(st.pinX, st.y - L.pipeR, 14, { ang: -Math.PI / 2, colors: ["#f3f7fb", "#cbd5e1", "#fde68a"], speed: 170, spread: 1.5, life: 0.5, g: 260, size: 4 });
     sPull();
   }
   function onPulled(st) {  // bolt fully out
