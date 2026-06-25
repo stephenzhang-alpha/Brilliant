@@ -1,10 +1,15 @@
 import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GamesLayout } from './components/layout/GamesLayout';
-import { JourneyPage } from './pages/Journey';
+import { IntroPage } from './pages/Intro';
+import { DinoPage } from './pages/DinoPage';
+import { ExpressionsPage } from './pages/Expressions';
+import { GatesPage } from './pages/GatesPage';
+import { PinsPage } from './pages/PinsPage';
 import { LeaderboardPage } from './pages/Leaderboard';
 import { LoginPage } from './pages/Login';
 import { SignupPage } from './pages/Signup';
+import { StageGuard } from './quest/StageGuard';
 import { useAuthStore } from './stores/authStore';
 import { useScoresStore } from './stores/scoresStore';
 
@@ -13,6 +18,11 @@ import { useScoresStore } from './stores/scoresStore';
  * bundle) that shares only auth + styling with Project Equation. Uses a
  * HashRouter so its routes work as a secondary static entry without server
  * rewrites.
+ *
+ * The quest is five gated pages (Intro → Dino → Expressions → Gate Runner →
+ * Pull the Pins). Each page is wrapped in a <StageGuard> so it can only be
+ * opened once the previous page's task is complete; the player may always go
+ * back and replay earlier pages.
  */
 export default function GamesApp() {
   const { initialize, user } = useAuthStore();
@@ -32,7 +42,14 @@ export default function GamesApp() {
     <HashRouter>
       <GamesLayout>
         <Routes>
-          <Route path="/" element={<JourneyPage />} />
+          <Route path="/" element={<StageGuard index={0}><IntroPage /></StageGuard>} />
+          <Route path="/dino" element={<StageGuard index={1}><DinoPage /></StageGuard>} />
+          <Route
+            path="/expressions"
+            element={<StageGuard index={2}><ExpressionsPage /></StageGuard>}
+          />
+          <Route path="/gates" element={<StageGuard index={3}><GatesPage /></StageGuard>} />
+          <Route path="/pins" element={<StageGuard index={4}><PinsPage /></StageGuard>} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />

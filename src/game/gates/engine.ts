@@ -79,7 +79,9 @@ const CAM_D = 0.72; // camera distance — controls how fast things shrink
 const Z_START = 3.6; // distance of the first gate at the start
 const ROW_GAP_Z = 1.5; // z-distance between gate rows
 const SPEED_Z = 1.18; // z-units travelled per second
-const OP_ROWS = 10; // operation rows, mixing coefficient (±kx) and constant (±n) gates
+const OP_ROWS = 16; // operation rows, mixing coefficient (±kx) and constant (±n) gates — a long gauntlet
+/** Chance a post-opener row is an UNAVOIDABLE hazard (both lanes are monsters). */
+const HAZARD_P = 0.5;
 const NUM_ROWS = OP_ROWS + 1; // total gate rows: ops + the final assignment gate
 const ASSIGN_GAP_Z = 2.8; // extra gap before the assignment gate (room for the teach beat + steering)
 const ASSIGN_Z = Z_START + (OP_ROWS - 1) * ROW_GAP_Z + ASSIGN_GAP_Z; // the assignment gate sits last
@@ -215,6 +217,8 @@ export class GateRunner {
   readonly totalRows = NUM_ROWS;
   bossPower = 0;
   bossDefeated = false;
+  /** True once the boss is resolved with crowd > 0 (a win); false = wiped out. */
+  won = false;
   combo = 0;
   bestCombo = 0;
 
@@ -305,6 +309,7 @@ export class GateRunner {
     this.taught = false;
     this.rowsCleared = 0;
     this.bossDefeated = false;
+    this.won = false;
     this.combo = 0;
     this.bestCombo = 0;
     this.lane = 0;
@@ -326,9 +331,9 @@ export class GateRunner {
     for (const cu of this.cues) cu.active = false;
     this.buildRows();
     this.bossZ = ASSIGN_Z + BOSS_GAP_Z;
-    // Tuned for the new scale: your value is a·x + b (low hundreds at best), so
-    // the boss takes a modest, survivable bite.
-    this.bossPower = randInt(22, 52);
+    // The boss is now a serious threat sized to your evaluated crowd — computed
+    // in submitEvaluation() once `count` is known. 0 here means "not set yet".
+    this.bossPower = 0;
   }
 
   // Generate the gate rows for a run. Each operation row belongs to one of two
@@ -336,10 +341,11 @@ export class GateRunner {
   // Row 0 is a coefficient opener and row 1 a constant opener — both are two
   // adds, so whatever lane you take you leave with a > 1 and b > 0 and are
   // genuinely building an ax + b. The remaining rows are an even mix, shuffled,
-  // with ~40% "trap" rows pairing a good add against a subtract monster. The
-  // ASSIGNMENT gate is placed LAST, offering two single-digit values to steer
-  // between (bigger is better). Magnitudes are small so a strong run lands in
-  // the low hundreds and 1000 stays effectively out of reach.
+  // with ~HALF being UNAVOIDABLE hazard rows where BOTH lanes are monsters —
+  // there is no safe lane, you only get to choose the smaller bite. Surviving
+  // with a big expression then evaluating it correctly is the only way past the
+  // tough final boss. The ASSIGNMENT gate is placed LAST, offering two
+  // single-digit values to steer between (bigger is better).
   private buildRows() {
     this.rows = [];
 
@@ -368,25 +374,26 @@ export class GateRunner {
   }
 
   // A coefficient row (±kx). The opener (i <= 1) is always two adds; later rows
-  // are ~40% trap (a healthy "+kx" vs. a "−kx" monster to dodge).
+  // are ~HALF unavoidable hazards — BOTH lanes are "−kx" monsters, so you cannot
+  // dodge the damage, only steer toward the smaller bite. The rest are two adds.
   private buildCoefRow(i: number): [Choice, Choice] {
-    if (i > 1 && Math.random() < 0.4) {
-      const good = addxChoice(randInt(3, 5));
-      const bad = subxChoice(randInt(1, 3));
-      return Math.random() < 0.5 ? [good, bad] : [bad, good];
+    if (i > 1 && Math.random() < HAZARD_P) {
+      const a = randInt(1, 3);
+      const b = randInt(1, 3);
+      return [subxChoice(a), subxChoice(b)];
     }
     const small = randInt(2, 3);
     const big = randInt(small + 1, 5);
     return Math.random() < 0.5 ? [addxChoice(small), addxChoice(big)] : [addxChoice(big), addxChoice(small)];
   }
 
-  // A constant row (±n). Mirrors the coefficient row but folds into b, using
-  // slightly bigger numbers so the constant term reads clearly in the bubble.
+  // A constant row (±n). Mirrors the coefficient row but folds into b. Hazard
+  // rows put a "−n" monster in BOTH lanes (unavoidable); the rest are two adds.
   private buildConstRow(i: number): [Choice, Choice] {
-    if (i > 1 && Math.random() < 0.4) {
-      const good = addcChoice(randInt(4, 7));
-      const bad = subcChoice(randInt(1, 3));
-      return Math.random() < 0.5 ? [good, bad] : [bad, good];
+    if (i > 1 && Math.random() < HAZARD_P) {
+      const a = randInt(1, 4);
+      const b = randInt(1, 4);
+      return [subcChoice(a), subcChoice(b)];
     }
     const small = randInt(3, 4);
     const big = randInt(small + 1, 8);
@@ -756,6 +763,11 @@ export class GateRunner {
     this.count = Math.max(0, this.evalAnswer);
     this.evaluated = true;
 
+    // Size the final boss to the crowd you actually built: a heavy flat hit plus
+    // a chunk of your count, so a weak expression gets wiped out (a loss) and
+    // only a strong, well-built one survives with crowd to spare.
+    this.bossPower = randInt(45, 80) + Math.round(this.count * 0.3);
+
     const px = this.crowdX();
     // Frame the floating cue as evaluating the EXPRESSION at a value
     // ("x = 7: 3x + 5 = 26") rather than a bare substituted line.
@@ -782,6 +794,7 @@ export class GateRunner {
     this.bossDefeated = true;
     const before = this.count;
     this.count = Math.max(0, this.count - this.bossPower);
+    this.won = this.count > 0; // crowd survived => win; wiped to 0 => loss
     this.combo = 0;
     this.shake = 16;
     this.whiteFlash = 0.85;
@@ -1111,8 +1124,8 @@ export class GateRunner {
     if (this.bossDefeated || this.bossZ <= 0.02 || this.bossZ > 60) return;
     const p = this.project(0, this.bossZ);
     const s = p.s;
-    const w = 1.8 * NEAR_HALF_W * s;
-    const h = 168 * s;
+    const w = 2.05 * NEAR_HALF_W * s;
+    const h = 196 * s;
     if (h < 3) return;
     const cx = p.x;
     const topY = p.y - h;
@@ -1159,7 +1172,8 @@ export class GateRunner {
     this.roundRect(ctx, cx - w * 0.22, topY + h * 0.6, w * 0.44, h * 0.13, 6 * s);
     ctx.fill();
 
-    this.label(ctx, `−${this.bossPower}`, cx, topY + h * 0.86, s * 1.05, '#ffffff', true);
+    // The bite is sized to your crowd at evaluation, so only show it once known.
+    this.label(ctx, this.evaluated ? `−${this.bossPower}` : '?', cx, topY + h * 0.86, s * 1.05, '#ffffff', true);
 
     if (this.bossZ < 4.5) {
       ctx.globalAlpha = 0.6 + 0.4 * pulse;

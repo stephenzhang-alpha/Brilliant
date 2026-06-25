@@ -175,6 +175,10 @@ export class DinoGame {
   obstaclesEnabled = true;
   /** Draws an attention ring around the score / high score (tutorial). */
   highlightScore = false;
+  /** When true the running simulation freezes (used for the +1000 reinforcement
+   *  question): particles keep animating but the world, score, and obstacles
+   *  hold until the React layer clears it. */
+  paused = false;
 
   // Dino state
   private dinoY = GROUND_Y - DINO_HEIGHT;
@@ -246,6 +250,7 @@ export class DinoGame {
 
   reset() {
     this.status = 'ready';
+    this.paused = false;
     this.score = 0;
     this.scoreFloat = 0;
     this.distance = 0;
@@ -375,10 +380,14 @@ export class DinoGame {
     this.squash += (0 - this.squash) * Math.min(1, dt * SQUASH_DECAY);
     this.updateParticles(dt);
 
-    // Scenery animates in every state so the title screen feels alive.
-    this.updateScenery(dt, this.status === 'running' ? this.speed : 0);
+    // Scenery animates in every state so the title screen feels alive. While
+    // paused for a reinforcement question the world holds, so feed it 0 speed.
+    this.updateScenery(dt, this.status === 'running' && !this.paused ? this.speed : 0);
 
     if (this.status !== 'running') return;
+    // Frozen for a reinforcement question: particles above keep flying, but the
+    // world, score, and obstacles hold until the React layer clears `paused`.
+    if (this.paused) return;
 
     // Speed + score
     this.speed = Math.min(SPEED_MAX, this.speed + SPEED_ACCEL * dt);

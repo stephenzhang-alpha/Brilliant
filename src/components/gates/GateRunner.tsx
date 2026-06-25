@@ -2,16 +2,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { GateRunner as Engine, GateStatus, RunPhase, GW, GH } from '../../game/gates/engine';
 
 interface Props {
-  /** Called once when the player crosses the finish line. */
-  onFinish?: (count: number) => void;
-  /**
-   * Still accepted for backwards-compatibility but no longer used: the host now
-   * owns the "go to the next game" affordance, so the finish card renders no
-   * Next button. Existing callers may keep passing these without a type error.
-   */
-  onNext?: () => void;
-  nextLabel?: string;
-  /** When false (scrolled off-screen), the simulation freezes to save CPU. */
+  /** Fired once when the run ends with the crowd surviving (count > 0). */
+  onWin?: (count: number) => void;
+  /** Fired once when the crowd is wiped out to 0 (a loss — replay required). */
+  onLose?: (count: number) => void;
+  /** The victory card's "continue" button — host navigates to the next page. */
+  onAdvance?: () => void;
+  /** When false (off-screen), the simulation freezes to save CPU. */
   active?: boolean;
 }
 
@@ -46,7 +43,7 @@ const START_KEYS = new Set(['Space', 'Enter', 'ArrowUp', 'KeyW']);
 // from the assignment digits (4..9) so it never spoils the upcoming choice.
 const TEACH_X = 2;
 
-export function GateRunner({ onFinish, active = true }: Props) {
+export function GateRunner({ onWin, onLose, onAdvance, active = true }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const [status, setStatus] = useState<GateStatus>('ready');
@@ -58,10 +55,15 @@ export function GateRunner({ onFinish, active = true }: Props) {
   const [finalCount, setFinalCount] = useState(0);
   const [bestCombo, setBestCombo] = useState(0);
   const [recap, setRecap] = useState<Recap | null>(null);
+  const [won, setWon] = useState(false);
   const activeRef = useRef(active);
+  const onWinRef = useRef(onWin);
+  const onLoseRef = useRef(onLose);
   useEffect(() => {
     activeRef.current = active;
-  }, [active]);
+    onWinRef.current = onWin;
+    onLoseRef.current = onLose;
+  }, [active, onWin, onLose]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -79,8 +81,10 @@ export function GateRunner({ onFinish, active = true }: Props) {
     engine.onComplete = (count) => {
       setFinalCount(count);
       setBestCombo(engine.bestCombo);
+      setWon(engine.won);
       setRecap({ expr: engine.exprLabel(), x: engine.assignedX, correct: engine.evalCorrect });
-      onFinish?.(count);
+      if (engine.won) onWinRef.current?.(count);
+      else onLoseRef.current?.(count);
     };
 
     let raf = 0;
@@ -163,7 +167,6 @@ export function GateRunner({ onFinish, active = true }: Props) {
       window.removeEventListener('keyup', onKeyUp);
       engineRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const worldXFromEvent = (e: React.PointerEvent) => {
@@ -201,11 +204,7 @@ export function GateRunner({ onFinish, active = true }: Props) {
   }, []);
 
   // Replay: reset the engine to a fresh run and clear the finish-card state so
-  // the completion overlay closes and the run starts over. Finishing again
-  // re-fires engine.onComplete → onFinish, so the host re-banks the score (the
-  // overall keeps the best per game, so a stronger replay counts). The rAF loop
-  // re-syncs status/phase from the engine, but we mirror them here too so the
-  // overlay clears in the same render rather than a frame later.
+  // the completion overlay closes and the run starts over.
   const handlePlayAgain = useCallback(() => {
     const engine = engineRef.current;
     if (!engine) return;
@@ -220,19 +219,18 @@ export function GateRunner({ onFinish, active = true }: Props) {
     setRecap(null);
     setFinalCount(0);
     setBestCombo(0);
+    setWon(false);
   }, []);
 
   const headline =
-    finalCount >= 1000
-      ? 'JACKPOT!'
-      : finalCount >= 210
-        ? 'Incredible!'
-        : finalCount >= 145
-          ? 'Huge run!'
-          : finalCount >= 80
-            ? 'Nice run!'
-            : 'Finish!';
-  const headlineEmoji = finalCount >= 1000 ? '🌟' : finalCount >= 210 ? '🚀' : '🎉';
+    finalCount >= 210
+      ? 'Incredible!'
+      : finalCount >= 145
+        ? 'Huge run!'
+        : finalCount >= 80
+          ? 'Nice run!'
+          : 'You survived!';
+  const headlineEmoji = finalCount >= 210 ? '🚀' : '🎉';
 
   return (
     <div className="w-full max-w-[430px] mx-auto">
@@ -251,15 +249,14 @@ export function GateRunner({ onFinish, active = true }: Props) {
             <div className="bg-black/55 backdrop-blur-sm rounded-2xl px-6 py-5">
               <p className="font-display text-white font-extrabold text-2xl">Gate Runner</p>
               <p className="text-white/85 mt-2 text-[15px] leading-snug">
-                You <b>are</b> the expression <b className="text-primary-light">ax + b</b>! Steer into green{' '}
-                <b className="text-lime">+x</b> gates to grow your <b>x's</b> (combine like terms) and cyan{' '}
-                <b className="text-cyan">+number</b> gates to add a <b>constant</b> — building something like{' '}
-                <b>3x + 5</b>.
+                You <b>are</b> the expression <b className="text-primary-light">ax + b</b>! Grow your{' '}
+                <b className="text-lime">+x</b> and <b className="text-cyan">+number</b> gates to build
+                something like <b>3x + 5</b>.
               </p>
               <p className="text-white/85 mt-2 text-[15px] leading-snug">
-                Dodge the <b className="text-coral">−x</b> and <b className="text-amber">−number</b> monsters. At the
-                end, x gets a value and <b className="text-primary-light">YOU evaluate</b> your own expression — then
-                survive the <b>boss</b>!
+                ⚠️ The monsters are <b className="text-coral">unavoidable</b> — both lanes bite, so
+                steer toward the <b>smaller</b> one. Build big, evaluate right, and survive a{' '}
+                <b className="text-coral">brutal boss</b>.
               </p>
               <p className="text-white/70 text-sm mt-3">Drag, or use ← → · Tap to start</p>
             </div>
@@ -393,12 +390,12 @@ export function GateRunner({ onFinish, active = true }: Props) {
           </div>
         )}
 
-        {status === 'complete' && (
+        {status === 'complete' && won && (
           <div className="absolute inset-0 flex items-center justify-center px-6 animate-fadein">
             <div className="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl">
               <p className="text-3xl">{headlineEmoji}</p>
               <p className="font-display tracking-[0.25em] text-text-muted text-xs font-bold mt-1">{headline}</p>
-              <p className="text-text text-sm mt-2">Your crowd reached</p>
+              <p className="text-text text-sm mt-2">Your crowd survived the boss with</p>
               <p className="font-display text-primary text-5xl font-extrabold tabular-nums leading-none mt-1">
                 {finalCount.toLocaleString()}
               </p>
@@ -418,10 +415,41 @@ export function GateRunner({ onFinish, active = true }: Props) {
                 </p>
               )}
               <button
-                onClick={handlePlayAgain}
-                className="mt-5 w-full bg-surface-light hover:bg-primary/10 text-primary font-display font-bold px-6 py-3 rounded-xl border-2 border-primary/20 transition-colors"
+                onClick={() => onAdvance?.()}
+                className="mt-5 w-full bg-primary hover:bg-primary-dark text-white font-display font-bold px-6 py-3 rounded-xl transition-colors animate-pulse"
               >
-                ↻ Play again
+                Continue to Pull the Pins →
+              </button>
+              <button
+                onClick={handlePlayAgain}
+                className="mt-2 text-text-muted hover:text-text text-xs underline"
+              >
+                or play again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status === 'complete' && !won && (
+          <div className="absolute inset-0 flex items-center justify-center px-6 animate-fadein">
+            <div className="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl">
+              <p className="text-3xl">💀</p>
+              <p className="font-display tracking-[0.25em] text-coral text-xs font-bold mt-1">WIPED OUT</p>
+              <p className="text-text text-sm mt-2 leading-snug">
+                The boss crushed your crowd to <b className="tabular-nums">0</b>. Build a{' '}
+                <b>bigger</b> expression and evaluate it right to survive!
+              </p>
+              {recap && (
+                <p className="text-text-muted text-[13px] mt-2">
+                  You were <b className="text-primary font-display">{recap.expr}</b> · x = {recap.x}
+                  {recap.correct ? '' : ' — and the evaluation slipped'}
+                </p>
+              )}
+              <button
+                onClick={handlePlayAgain}
+                className="mt-5 w-full bg-primary hover:bg-primary-dark text-white font-display font-bold px-6 py-3 rounded-xl transition-colors animate-pulse"
+              >
+                ↻ Try again
               </button>
             </div>
           </div>
