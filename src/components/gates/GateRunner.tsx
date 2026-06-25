@@ -4,8 +4,12 @@ import { GateRunner as Engine, GateStatus, RunPhase, GW, GH } from '../../game/g
 interface Props {
   /** Called once when the player crosses the finish line. */
   onFinish?: (count: number) => void;
-  /** Action for the "Next" button on the completion screen. */
-  onNext: () => void;
+  /**
+   * Still accepted for backwards-compatibility but no longer used: the host now
+   * owns the "go to the next game" affordance, so the finish card renders no
+   * Next button. Existing callers may keep passing these without a type error.
+   */
+  onNext?: () => void;
   nextLabel?: string;
   /** When false (scrolled off-screen), the simulation freezes to save CPU. */
   active?: boolean;
@@ -42,7 +46,7 @@ const START_KEYS = new Set(['Space', 'Enter', 'ArrowUp', 'KeyW']);
 // from the assignment digits (4..9) so it never spoils the upcoming choice.
 const TEACH_X = 2;
 
-export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = true }: Props) {
+export function GateRunner({ onFinish, active = true }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const engineRef = useRef<Engine | null>(null);
   const [status, setStatus] = useState<GateStatus>('ready');
@@ -266,7 +270,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
         )}
 
         {status === 'running' && phase === 'teach' && teachData && (
-          <div className="absolute inset-0 flex items-center justify-center px-4 animate-fadein">
+          <div className="absolute inset-0 flex items-center justify-center px-4 animate-fadein bg-black/70 backdrop-blur-lg">
             <div className="bg-white rounded-2xl px-6 py-5 text-center shadow-2xl w-full max-w-[330px]">
               <p className="text-2xl">🧮</p>
               <p className="font-display tracking-[0.2em] text-text-muted text-[11px] font-bold mt-1">EVALUATE TIME</p>
@@ -321,7 +325,7 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
         )}
 
         {status === 'running' && phase === 'eval' && evalData && (
-          <div className="absolute inset-0 flex items-center justify-center px-4 animate-fadein">
+          <div className="absolute inset-0 flex items-center justify-center px-4 animate-fadein bg-black/70 backdrop-blur-lg">
             <div className="bg-white rounded-2xl px-6 py-5 text-center shadow-2xl w-full max-w-[340px]">
               {picked === null ? (
                 <>
@@ -417,14 +421,8 @@ export function GateRunner({ onFinish, onNext, nextLabel = 'Next →', active = 
                 </p>
               )}
               <button
-                onClick={onNext}
-                className="mt-5 w-full bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-xl transition-colors"
-              >
-                {nextLabel}
-              </button>
-              <button
                 onClick={handlePlayAgain}
-                className="mt-2.5 w-full bg-surface-light hover:bg-primary/10 text-primary font-display font-bold px-6 py-3 rounded-xl border-2 border-primary/20 transition-colors"
+                className="mt-5 w-full bg-surface-light hover:bg-primary/10 text-primary font-display font-bold px-6 py-3 rounded-xl border-2 border-primary/20 transition-colors"
               >
                 ↻ Play again
               </button>

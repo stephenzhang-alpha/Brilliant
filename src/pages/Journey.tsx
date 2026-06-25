@@ -237,17 +237,24 @@ export function JourneyPage() {
         style={{ background: GATE_BG, scrollSnapAlign: 'start' }}
       >
         {gatesUnlocked ? (
-          <div className="w-full" style={{ maxWidth: 460 }}>
-            <GateRunner
-              active={active === 'gates'}
-              onFinish={(c) => {
-                addOverall(c, 'gates');
-                unlock('tower');
-              }}
-              onNext={() => scrollTo('tower')}
-              nextLabel="Next → Pull the Pin ↓"
-            />
-          </div>
+          <>
+            <div className="w-full" style={{ maxWidth: 460 }}>
+              <GateRunner
+                active={active === 'gates'}
+                onFinish={(c) => {
+                  addOverall(c, 'gates');
+                  unlock('tower');
+                }}
+                onNext={() => scrollTo('tower')}
+              />
+            </div>
+            <button
+              onClick={() => scrollTo('tower')}
+              className="mt-6 text-white/90 hover:text-white text-sm font-display font-semibold animate-bob"
+            >
+              ↓ practice games below
+            </button>
+          </>
         ) : (
           <LockedLesson
             lessonLabel="Stage 2 · Expressions"

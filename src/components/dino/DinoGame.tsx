@@ -341,8 +341,15 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
       >
         <canvas
           ref={canvasRef}
-          className="block w-full h-full"
+          className={[
+            'block w-full h-full transition duration-500 ease-out',
+            // While the variables pop-up is open the canvas is heavily faded +
+            // blurred so the moving dino stops competing with the lesson; it
+            // springs back to full strength the moment the lesson is dismissed.
+            tutorialStep !== null ? 'opacity-[0.12] blur-[3px] saturate-50' : 'opacity-100',
+          ].join(' ')}
           style={{ imageRendering: 'pixelated' }}
+          aria-hidden={tutorialStep !== null}
         />
 
         {tutorialStep === null && status === 'ready' && (
@@ -420,8 +427,12 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
           aria-modal="true"
           aria-labelledby="dino-var-title"
         >
-          {/* Dim + blur the scene, but keep the running dino alive behind it. */}
-          <div className="absolute inset-0 bg-[#2a2350]/55 backdrop-blur-sm" aria-hidden />
+          {/* Heavy dim + strong blur so the moving game recedes far behind the
+              lesson. This sits BEHIND the crisp card (the next sibling), so it
+              only obscures the game — never the pop-up itself. The dino keeps
+              running underneath so the live score / high-score chips above stay
+              alive, but it is now barely perceptible. */}
+          <div className="absolute inset-0 bg-[#160f38]/85 backdrop-blur-2xl" aria-hidden />
 
           <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface shadow-2xl shadow-primary/40 ring-1 ring-white/50">
             {/* Header ribbon */}
