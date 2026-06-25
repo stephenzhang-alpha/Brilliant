@@ -1,4 +1,4 @@
-import { initializeApp, FirebaseApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
@@ -15,12 +15,11 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.apiKey !== "your-api-key"
 );
 
-let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
 if (isFirebaseConfigured) {
-  app = initializeApp(firebaseConfig);
+  const app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
 
@@ -29,4 +28,4 @@ if (isFirebaseConfigured) {
   }
 }
 
-export { app, auth, db };
+export { auth, db };

@@ -49,7 +49,7 @@ export type RunPhase = 'run' | 'teach' | 'eval';
 // 'addx'/'subx' add or subtract a MULTIPLE OF x (changes the coefficient a);
 // 'addc'/'subc' add or subtract a plain CONSTANT (changes the constant b);
 // 'assign' gives the variable x a concrete single-digit value (last gate).
-export type ChoiceKind = 'assign' | 'addx' | 'subx' | 'addc' | 'subc';
+type ChoiceKind = 'assign' | 'addx' | 'subx' | 'addc' | 'subc';
 
 interface Choice {
   kind: ChoiceKind;
@@ -1388,30 +1388,5 @@ export class GateRunner {
     ctx.arcTo(x, y + h, x, y, rr);
     ctx.arcTo(x, y, x + w, y, rr);
     ctx.closePath();
-  }
-
-  debugSnapshot() {
-    return {
-      s: this.status,
-      phase: this.phase,
-      c: this.count,
-      coef: this.coef,
-      b: this.constant,
-      expr: this.exprLabel(),
-      assigned: this.assigned,
-      evaluated: this.evaluated,
-      x: this.assignedX,
-      ans: this.evalAnswer,
-      opts: this.evalOptions,
-      picked: this.evalPicked,
-      lane: Number(this.lane.toFixed(2)),
-      boss: this.bossPower,
-      combo: this.combo,
-      cleared: this.rowsCleared,
-      rows: this.rows
-        .filter((r) => !r.applied && r.z > 0 && r.z < 14)
-        .map((r) => [Number(r.z.toFixed(1)), r.left.label, r.right.label]),
-      bz: Number(this.bossZ.toFixed(1)),
-    };
   }
 }

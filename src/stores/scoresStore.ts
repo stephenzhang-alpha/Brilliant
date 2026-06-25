@@ -26,7 +26,7 @@ export interface GameUser {
   email?: string | null;
 }
 
-export function sanitizeName(raw: string): string {
+function sanitizeName(raw: string): string {
   const cleaned = raw.replace(/[^a-zA-Z0-9 _-]/g, '').trim().slice(0, MAX_NAME_LEN);
   return cleaned;
 }

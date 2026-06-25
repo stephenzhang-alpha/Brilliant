@@ -34,28 +34,6 @@ function isDuckEvent(e: KeyboardEvent): boolean {
   );
 }
 
-// DEV-only: mirror the live game state onto a DOM attribute so automated
-// playtests (which run in an isolated JS world) can read it. Stripped from
-// production builds via the import.meta.env.DEV guard at the call site.
-function publishDebugState(canvas: HTMLCanvasElement, engine: Engine) {
-  const e = engine as unknown as {
-    status: string;
-    score: number;
-    speed: number;
-    dinoY: number;
-    onGround: boolean;
-    nightT: number;
-    obstacles: { x: number; w: number; y: number; h: number; kind: string }[];
-  };
-  canvas.dataset.game = JSON.stringify({
-    s: e.status,
-    sc: e.score,
-    sp: Math.round(e.speed),
-    n: Number(e.nightT.toFixed(2)),
-    o: e.obstacles.map((o) => [Math.round(o.x), o.w, Math.round(o.y), o.h, o.kind === 'bird' ? 1 : 0]),
-  });
-}
-
 /** A "play this other game" prompt surfaced on a Dino death. */
 export interface DeathOffer {
   label: string;
@@ -221,7 +199,6 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
           lastStatus = engine.status;
           setStatus(engine.status);
         }
-        if (import.meta.env.DEV) publishDebugState(canvas, engine);
       }
       raf = requestAnimationFrame(loop);
     };

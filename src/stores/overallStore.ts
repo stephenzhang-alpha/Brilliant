@@ -60,7 +60,7 @@ export const RANKS: Rank[] = [
 ];
 
 /** Index (into RANKS) of the rank held at a given overall score. */
-export function rankIndexFor(overall: number): number {
+function rankIndexFor(overall: number): number {
   let idx = 0;
   for (let i = 0; i < RANKS.length; i++) {
     if (overall >= RANKS[i].min) idx = i;

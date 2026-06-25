@@ -123,9 +123,6 @@ export function GateRunner({ onFinish, active = true }: Props) {
           }
           setPhase(engine.phase);
         }
-        if (import.meta.env.DEV) {
-          canvas.dataset.gates = JSON.stringify(engine.debugSnapshot());
-        }
       }
       raf = requestAnimationFrame(loop);
     };
