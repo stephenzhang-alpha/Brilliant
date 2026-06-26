@@ -112,7 +112,6 @@ export function ConceptCheck({
               ].join(' ')}
             >
               <span className="block font-display font-bold text-text">{opt.label}</span>
-              {opt.hint && <span className="mt-0.5 block text-xs text-text-muted">{opt.hint}</span>}
               {isWrongPick && (
                 <span className="mt-1 block text-xs font-semibold text-coral">not this one</span>
               )}
