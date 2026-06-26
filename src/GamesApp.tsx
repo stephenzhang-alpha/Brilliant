@@ -6,6 +6,8 @@ import { DinoPage } from './pages/DinoPage';
 import { ExpressionsPage } from './pages/Expressions';
 import { GatesPage } from './pages/GatesPage';
 import { PinsPage } from './pages/PinsPage';
+import { ScalesPage } from './pages/Scales';
+import { BalancePage } from './pages/BalancePage';
 import { LeaderboardPage } from './pages/Leaderboard';
 import { LoginPage } from './pages/Login';
 import { SignupPage } from './pages/Signup';
@@ -19,10 +21,10 @@ import { useScoresStore } from './stores/scoresStore';
  * HashRouter so its routes work as a secondary static entry without server
  * rewrites.
  *
- * The quest is five gated pages (Intro → Dino → Expressions → Gate Runner →
- * Pull the Pins). Each page is wrapped in a <StageGuard> so it can only be
- * opened once the previous page's task is complete; the player may always go
- * back and replay earlier pages.
+ * The quest is seven gated pages (Intro → Dino → Expressions → Gate Runner →
+ * Pull the Pins → Equations & Inequalities → Balance Game). Each page is wrapped
+ * in a <StageGuard> so it can only be opened once the previous page's task is
+ * complete; the player may always go back and replay earlier pages.
  */
 export default function GamesApp() {
   const { initialize, user } = useAuthStore();
@@ -50,6 +52,8 @@ export default function GamesApp() {
           />
           <Route path="/gates" element={<StageGuard index={3}><GatesPage /></StageGuard>} />
           <Route path="/pins" element={<StageGuard index={4}><PinsPage /></StageGuard>} />
+          <Route path="/scales" element={<StageGuard index={5}><ScalesPage /></StageGuard>} />
+          <Route path="/balance" element={<StageGuard index={6}><BalancePage /></StageGuard>} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />

@@ -36,10 +36,10 @@ export const FAST_FALL_GRAVITY = 6400;
 export const JUMP_CUTOFF_VELOCITY = -260;
 
 // --- World speed ----------------------------------------------------------
-export const SPEED_START = 348;
-export const SPEED_MAX = 900;
+export const SPEED_START = 420;
+export const SPEED_MAX = 1050;
 /** How quickly the world accelerates (units/sec added per second). */
-export const SPEED_ACCEL = 16;
+export const SPEED_ACCEL = 22;
 
 // --- Scoring --------------------------------------------------------------
 /** Points accrued per world-unit travelled. */
@@ -48,10 +48,10 @@ export const MILESTONE_INTERVAL = 100;
 
 // --- Obstacles ------------------------------------------------------------
 /** Min/max horizontal gap to the next obstacle, expressed in seconds of travel. */
-export const SPAWN_GAP_MIN_SEC = 0.9;
-export const SPAWN_GAP_MAX_SEC = 1.8;
+export const SPAWN_GAP_MIN_SEC = 0.7;
+export const SPAWN_GAP_MAX_SEC = 1.45;
 /** Birds only start appearing once the player reaches this score. */
-export const BIRD_MIN_SCORE = 260;
+export const BIRD_MIN_SCORE = 170;
 
 // --- Day / night ----------------------------------------------------------
 /** Score interval between day<->night flips. */

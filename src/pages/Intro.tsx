@@ -62,11 +62,12 @@ export function IntroPage() {
             <span className="animate-shimmer pointer-events-none absolute inset-0 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-lg text-white/85 sm:text-xl">
-            A five-stage adventure through algebra — play games, beat bosses, and master{' '}
-            <span className="font-bold text-white">variables &amp; expressions</span> along the way.
+            A seven-stage adventure through algebra — play games, beat bosses, and master{' '}
+            <span className="font-bold text-white">variables, expressions &amp; equations</span> along
+            the way.
           </p>
           <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-sm">
-            {['🔢 Variables', '🦖 Dino Run', '🧩 Expressions', '🚪 Gate Runner', '📌 Pull the Pins'].map(
+            {['🔢 Variables', '🦖 Dino Run', '🧩 Expressions', '🚪 Gate Runner', '📌 Pull the Pins', '⚖️ Equations & Inequalities', '🎯 Balance Game'].map(
               (s, i) => (
                 <span
                   key={s}
@@ -86,10 +87,12 @@ export function IntroPage() {
             Meet your first variable
           </p>
           <p className="mt-2 text-white/85">
-            A <span className="font-bold text-amber-200">variable</span> is a named value that{' '}
-            <span className="font-semibold text-white">can change</span>. We usually write one as a
-            letter — like <span className="font-mono font-bold text-cyan-200">x</span>. Drag the
-            slider and watch <span className="font-mono font-bold text-cyan-200">x</span> change:
+            A <span className="font-bold text-amber-200">variable</span> is a{' '}
+            <span className="font-semibold text-white">letter that stands for a number</span> — often
+            one we do not know yet. We write it as a letter like{' '}
+            <span className="font-mono font-bold text-cyan-200">x</span>, and it can stand for
+            different values. Drag the slider to set{' '}
+            <span className="font-mono font-bold text-cyan-200">x</span>:
           </p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -113,11 +116,11 @@ export function IntroPage() {
             max={20}
             value={x}
             onChange={(e) => setX(Number(e.target.value))}
-            aria-label="Drag to change the variable x"
+            aria-label="Drag to set the variable x"
             className="mt-4 w-full cursor-pointer accent-amber-300"
           />
           <p className="mt-1 text-center text-xs text-white/60">
-            Same name, new value — that&apos;s exactly what makes it a variable.
+            The same letter x can stand for different numbers — that is what makes it a variable.
           </p>
         </div>
 
@@ -131,6 +134,7 @@ export function IntroPage() {
             columns={quiz.columns}
             ctaLabel="Start the Dino Run →"
             onCorrect={onPass}
+            topic="variables"
           />
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
@@ -15,11 +15,12 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.apiKey !== "your-api-key"
 );
 
+let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
 if (isFirebaseConfigured) {
-  const app = initializeApp(firebaseConfig);
+  app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
 
@@ -28,4 +29,26 @@ if (isFirebaseConfigured) {
   }
 }
 
-export { auth, db };
+// Optional App Check — recommended once Firebase AI Logic is live to protect the
+// AI/backend quota from abuse. Activated only when a reCAPTCHA Enterprise site
+// key is provided (lazy-imported so it never loads otherwise); skipped in local
+// dev so nothing breaks when the key is absent.
+if (app && import.meta.env.VITE_RECAPTCHA_SITE_KEY) {
+  const firebaseApp = app;
+  void import('firebase/app-check')
+    .then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
+      initializeAppCheck(firebaseApp, {
+        provider: new ReCaptchaEnterpriseProvider(
+          import.meta.env.VITE_RECAPTCHA_SITE_KEY as string,
+        ),
+        isTokenAutoRefreshEnabled: true,
+      });
+    })
+    .catch(() => {
+      // App Check is best-effort; a failure here must not break the app.
+    });
+}
+
+// `app` is exported so other Firebase services (e.g. AI Logic in `./ai`) can
+// attach to the same initialized app. It is null when Firebase is unconfigured.
+export { app, auth, db };

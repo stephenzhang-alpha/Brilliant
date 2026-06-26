@@ -35,7 +35,7 @@ const KEY = 'algebra_overall_score';
 const STORAGE_VERSION = 3;
 
 /** Number of quest pages; `unlockedStage` is clamped to [0, STAGE_COUNT - 1]. */
-export const STAGE_COUNT = 5;
+export const STAGE_COUNT = 7;
 
 export type ScoreSource = 'dino' | 'gates' | 'tower';
 

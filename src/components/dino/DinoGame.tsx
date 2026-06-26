@@ -36,6 +36,11 @@ function isDuckEvent(e: KeyboardEvent): boolean {
   );
 }
 
+/** Inclusive integer in [a, b]. */
+function randInt(a: number, b: number): number {
+  return Math.floor(a + Math.random() * (b - a + 1));
+}
+
 /** A "play this other game" prompt surfaced on a Dino death. */
 export interface DeathOffer {
   label: string;
@@ -55,7 +60,7 @@ interface DinoGameProps {
   active?: boolean;
 }
 
-/** A reinforcement checkpoint shown every 1000 points. */
+/** A reinforcement checkpoint shown every 300-500 points. */
 interface Reinforcement {
   quiz: Quiz;
   at: number;
@@ -63,10 +68,10 @@ interface Reinforcement {
 
 /**
  * The Dino runner — starts at will, exactly like the classic game (press Space /
- * tap to begin, jump and duck to survive). Every time the score crosses a new
- * multiple of 1000 the run freezes and a quick variables question pops up; a
- * correct answer resumes the run. On death the host can offer a "continue"
- * button via `getDeathOffer` to move on to the next page.
+ * tap to begin, jump and duck to survive). Every 300-500 points the run freezes
+ * and a quick variables question pops up; answering correctly resumes the run
+ * with a brief immunity window. On death the host can offer a "continue" button
+ * via `getDeathOffer` to move on to the next page.
  */
 export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -84,8 +89,10 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
   const onRunScoreRef = useRef(onRunScore);
   const activeRef = useRef(active);
   const reinforceRef = useRef(reinforce);
-  // Highest 1000-point milestone already quizzed this run (0 = none yet).
-  const kiloRef = useRef(0);
+  // Score at which the next reinforcement checkpoint fires (a fresh random gap
+  // of 300-500 points after each), and how many have fired this run.
+  const nextCheckRef = useRef(0);
+  const checkCountRef = useRef(0);
 
   useEffect(() => {
     getDeathOfferRef.current = getDeathOffer;
@@ -125,16 +132,6 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
       setOffer(getDeathOfferRef.current?.() ?? null);
     };
 
-    // Every 1000 points: freeze the run and pop a variables reinforcement check.
-    engine.onMilestone = (score) => {
-      const kilo = Math.floor(score / 1000);
-      if (kilo <= kiloRef.current) return;
-      kiloRef.current = kilo;
-      engine.paused = true;
-      const quiz = VARIABLE_QUESTIONS[(kilo - 1) % VARIABLE_QUESTIONS.length];
-      setReinforce({ quiz, at: kilo * 1000 });
-    };
-
     let raf = 0;
     let last = performance.now();
     let lastStatus: GameStatus = engine.status;
@@ -148,9 +145,25 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
         engine.draw(ctx);
         if (engine.status !== lastStatus) {
           lastStatus = engine.status;
-          // A fresh run starts the milestone counter over.
-          if (engine.status === 'running') kiloRef.current = 0;
+          // A fresh run arms the first checkpoint 300-500 points in.
+          if (engine.status === 'running') {
+            nextCheckRef.current = randInt(300, 500);
+            checkCountRef.current = 0;
+          }
           setStatus(engine.status);
+        }
+        // Reinforcement checkpoint: when the score crosses the next threshold,
+        // freeze the run and pop a variables question. `engine.paused` is set
+        // immediately so this never re-fires before the player answers.
+        if (
+          engine.status === 'running' &&
+          !engine.paused &&
+          engine.score >= nextCheckRef.current
+        ) {
+          engine.paused = true;
+          const quiz = VARIABLE_QUESTIONS[checkCountRef.current % VARIABLE_QUESTIONS.length];
+          checkCountRef.current += 1;
+          setReinforce({ quiz, at: engine.score });
         }
       }
       raf = requestAnimationFrame(loop);
@@ -200,11 +213,16 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     engineRef.current?.releaseJump();
   }, []);
 
-  // Correct reinforcement answer: dismiss the pop-up and resume the run.
+  // Correct reinforcement answer: dismiss the pop-up, resume the run with a 2s
+  // immunity window, and schedule the next checkpoint 300-500 points later.
   const onReinforceCorrect = useCallback(() => {
     setReinforce(null);
     const eng = engineRef.current;
-    if (eng) eng.paused = false;
+    if (eng) {
+      eng.paused = false;
+      eng.immuneTimer = 2;
+      nextCheckRef.current = eng.score + randInt(300, 500);
+    }
   }, []);
 
   return (
@@ -324,6 +342,7 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
                 columns={reinforce.quiz.columns}
                 ctaLabel="Keep running →"
                 onCorrect={onReinforceCorrect}
+                topic="variables"
               />
             </div>
           </div>

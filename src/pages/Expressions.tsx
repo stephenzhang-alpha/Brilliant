@@ -138,6 +138,7 @@ export function ExpressionsPage() {
             columns={quiz.columns}
             ctaLabel="Enter Gate Runner →"
             onCorrect={onPass}
+            topic="expressions"
           />
         </div>
       </div>

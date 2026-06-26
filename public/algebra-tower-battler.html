@@ -223,12 +223,11 @@
    *                  atb:victory {power:<number>} after 3 levels.
    * ============================================================= */
 
-  /* Scoring tuned so a full clear is a SOLID contributor on par with the other
-     two games (overall = sum of each game's best run; ranks at 250/750/1500/3000).
-     Stations: 6 gems, 17 pin-pulls (all gated by a question), 3 level clears.
-     Flawless run: 6 gems x40 + 17 first-try x6 + 3 clears x40 = 240+102+120 = 462.
-     Even a clear with zero first-try bonuses still banks 240+120 = 360, so a full
-     clear always lands ~360-462 (comfortably in the ~300-500 target band). */
+  /* Scoring tuned so a full clear is a SOLID contributor (overall = sum of each
+     game's best run). The levels are now a tougher gauntlet:
+     6 gems, 24 pin-pulls (all gated by a question), 3 level clears.
+     Flawless run: 6 gems x40 + 24 first-try x6 + 3 clears x40 = 240+144+120 = 504.
+     Even a clear with zero first-try bonuses still banks 240+120 = 360. */
   var GEM = 40, FIRST_TRY = 6, CLEAR_BONUS = 40;
   var PAL = { violet:"#7c3aed", violetD:"#6d28d9", violetL:"#a78bfa", pink:"#ec4899",
               cyan:"#06b6d4", amber:"#f59e0b", green:"#22c55e", greenD:"#15803d", red:"#ef4444" };
@@ -246,40 +245,47 @@
   var LEVELS = [
     {
       name: "Level 1 / 3",
-      intro: "Each drain traps just ONE 🔥. Grab the 💎, open the drain, then drop the 🔥 in — and pull EVERY pin to clear!",
-      // 1 gem · 1 hazard · 1 drain  →  solve: 💎, drain, 🔥
+      intro: "Each drain traps just ONE 🔥/🪨. Grab the 💎 first, then open a drain and drop a hazard in — pull EVERY pin to clear!",
+      // 1 gem · 2 hazards · 2 drains  →  solve: 💎, drain, 🔥, drain, 🪨
       stations: [
         { type:"gem",    emoji:"💎", side:-1 },
         { type:"hazard", emoji:"🔥", side: 1 },
+        { type:"drain",              side:-1 },
+        { type:"hazard", emoji:"🪨", side: 1 },
         { type:"drain",              side:-1 }
       ]
     },
     {
       name: "Level 2 / 3",
-      intro: "Two fires, two drains — but each drain holds only ONE. Grab both 💎 first, then give each 🔥 its own drain.",
-      // 2 gems · 2 hazards · 2 drains  →  solve: 💎, 💎, drain, 🔥, drain, 🪨
+      intro: "Three hazards, three drains — each holds only ONE. Grab both 💎 first, then give every 🔥/🪨 its own drain.",
+      // 2 gems · 3 hazards · 3 drains  →  solve: 💎, 💎, then (drain, hazard) x3
       stations: [
         { type:"gem",    emoji:"💎", side:-1 },
         { type:"hazard", emoji:"🔥", side: 1 },
-        { type:"drain",              side: 1 },
-        { type:"gem",    emoji:"💎", side:-1 },
-        { type:"hazard", emoji:"🪨", side: 1 },
-        { type:"drain",              side:-1 }
-      ]
-    },
-    {
-      name: "Level 3 / 3",
-      intro: "Trickiest! A 💎 is lost if a drain below it is open, so grab every 💎 first. Each drain traps just ONE hazard — then pull every pin to win!",
-      // 3 gems · 2 hazards · 3 drains (one spare)  →  solve: 💎, 💎, 💎, drain, 🔥, drain, 🪨, drain
-      stations: [
-        { type:"hazard", emoji:"🔥", side: 1 },
-        { type:"gem",    emoji:"💎", side:-1 },
         { type:"drain",              side: 1 },
         { type:"gem",    emoji:"💎", side:-1 },
         { type:"hazard", emoji:"🪨", side: 1 },
         { type:"drain",              side:-1 },
-        { type:"gem",    emoji:"💎", side:-1 },
+        { type:"hazard", emoji:"🔥", side: 1 },
         { type:"drain",              side: 1 }
+      ]
+    },
+    {
+      name: "Level 3 / 3",
+      intro: "The gauntlet! A 💎 is lost if a drain below it is open, so grab all THREE 💎 first. Then trap four hazards — one per drain — and pull every pin to win!",
+      // 3 gems · 4 hazards · 4 drains  →  solve: 💎,💎,💎, then (drain, hazard) x4
+      stations: [
+        { type:"hazard", emoji:"🔥", side: 1 },
+        { type:"gem",    emoji:"💎", side:-1 },
+        { type:"drain",              side: 1 },
+        { type:"hazard", emoji:"🪨", side: 1 },
+        { type:"gem",    emoji:"💎", side:-1 },
+        { type:"drain",              side:-1 },
+        { type:"hazard", emoji:"🔥", side: 1 },
+        { type:"gem",    emoji:"💎", side:-1 },
+        { type:"drain",              side: 1 },
+        { type:"hazard", emoji:"🪨", side: 1 },
+        { type:"drain",              side:-1 }
       ]
     }
   ];
@@ -958,8 +964,8 @@
     // expression-evaluation: L1 = variables + simple evaluation, L2 = evaluation (+squares),
     // L3 = order-of-ops / combine-like-terms / squares.
     var q;
-    if (level === 0) q = (Math.random() < 0.5) ? qEvalEasy() : qVar();
-    else if (level === 1) q = (Math.random() < 0.85) ? qEval() : qVar();
+    if (level === 0) q = (Math.random() < 0.65) ? qEval() : qEvalEasy();
+    else if (level === 1) q = (Math.random() < 0.5) ? qHard() : qEval();
     else q = qHard();
     q.tries = 0; return q;
   }
@@ -1033,11 +1039,11 @@
     if (g === 3) {
       c = shuffle([{ label: "variable", correct: true }, { label: "constant", correct: false },
         { label: "plus sign", correct: false }, { label: "total", correct: false }]);
-      return { concept: "Variables", prompt: "Your <b>score</b> changes as you play. A value that can change is called a…", choices: c,
-        nudge: "a value that can take different amounts has a special algebra name.",
-        steps: ["A <b>constant</b> stays the same, so that is not it",
-                "A value that can take different amounts is a <b>variable</b>",
-                "Your score keeps changing, so it acts like a <b>variable</b>"] };
+      return { concept: "Variables", prompt: "A <b>letter</b> that stands for a number (like x) is called a…", choices: c,
+        nudge: "a letter that can stand for different numbers has a special algebra name.",
+        steps: ["A <b>constant</b> is a fixed number, so that is not it",
+                "A letter that stands for a number is a <b>variable</b>",
+                "Letters like x and n are variables"] };
     }
     c = shuffle([{ label: "It can stand for different numbers", correct: true },
       { label: "It is always 1", correct: false },
@@ -1107,7 +1113,7 @@
 
   function qHard() {
     var g = diffGen(2, null, 7), L1 = pick(LETTERS), c, v, b, ans, c1, c2, s;
-    if (g === 0) { c = rint(2, 4); v = rint(2, 8); b = rint(2, 9); ans = c * v + b;
+    if (g === 0) { c = rint(2, 6); v = rint(3, 12); b = rint(2, 15); ans = c * v + b;
       return { concept: "Evaluate (order of ops)", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + " + " + b + "</span>?", choices: numChoices(ans),
         nudge: "order of operations: do × before +, so start with " + c + " × " + v + ".",
         steps: ["Replace " + L1 + " with " + v + ": " + c + " × " + v + " + " + b,
@@ -1194,9 +1200,9 @@
 
   /* ---------- miss explanations ----------
      On a miss we coach the player instead of just flashing a hint:
-       • 1st miss  -> a warm nudge toward the FIRST step (q.nudge)
-       • 2nd miss  -> the full, number-specific worked solution (q.steps)
-                      + we reveal/allow the correct answer so nobody is stuck. */
+       • 1st & 2nd miss -> a warm nudge toward the FIRST step (q.nudge)
+       • 3rd miss       -> the full, number-specific worked solution (q.steps)
+                           + we reveal/allow the correct answer so nobody is stuck. */
   var MISS_LEADS = ["Not quite —", "So close —", "Almost there —", "Good try —", "Oops —"];
   var REVEAL_LEADS = ["No worries — let's solve it together:", "Here's the step-by-step:",
                       "Let's walk through it:", "Watch how it works:"];
@@ -1225,7 +1231,7 @@
     } else {
       btn.classList.add("wrong"); btn.disabled = true; sWrong();
       q.tries++;
-      var full = q.tries >= 2;
+      var full = q.tries >= 3;
       qFeedback.className = full ? "feedback solve" : "feedback bad";
       qFeedback.innerHTML = explainHTML(q, full);
       if (full) {

@@ -375,11 +375,14 @@ export class GateRunner {
 
   // A coefficient row (±kx). The opener (i <= 1) is always two adds; later rows
   // are ~HALF unavoidable hazards — BOTH lanes are "−kx" monsters, so you cannot
-  // dodge the damage, only steer toward the smaller bite. The rest are two adds.
+  // dodge the damage, only steer toward the smaller bite. The two monster bites
+  // are drawn over a wide range and forced to differ, so the lesser-evil choice
+  // genuinely matters. The rest are two adds.
   private buildCoefRow(i: number): [Choice, Choice] {
     if (i > 1 && Math.random() < HAZARD_P) {
-      const a = randInt(1, 3);
-      const b = randInt(1, 3);
+      const a = randInt(1, 6);
+      let b = randInt(1, 6);
+      while (b === a) b = randInt(1, 6);
       return [subxChoice(a), subxChoice(b)];
     }
     const small = randInt(2, 3);
@@ -388,11 +391,13 @@ export class GateRunner {
   }
 
   // A constant row (±n). Mirrors the coefficient row but folds into b. Hazard
-  // rows put a "−n" monster in BOTH lanes (unavoidable); the rest are two adds.
+  // rows put a "−n" monster in BOTH lanes (unavoidable), over an even wider,
+  // always-differing range; the rest are two adds.
   private buildConstRow(i: number): [Choice, Choice] {
     if (i > 1 && Math.random() < HAZARD_P) {
-      const a = randInt(1, 4);
-      const b = randInt(1, 4);
+      const a = randInt(1, 9);
+      let b = randInt(1, 9);
+      while (b === a) b = randInt(1, 9);
       return [subcChoice(a), subcChoice(b)];
     }
     const small = randInt(3, 4);
@@ -763,10 +768,11 @@ export class GateRunner {
     this.count = Math.max(0, this.evalAnswer);
     this.evaluated = true;
 
-    // Size the final boss to the crowd you actually built: a heavy flat hit plus
-    // a chunk of your count, so a weak expression gets wiped out (a loss) and
-    // only a strong, well-built one survives with crowd to spare.
-    this.bossPower = randInt(45, 80) + Math.round(this.count * 0.3);
+    // Size the final boss to the crowd you actually built: a flat hit plus a
+    // slice of your count. Tuned so a weak expression is wiped out (a loss) but a
+    // strong, well-built one clearly survives — the boss stays a real threat
+    // while keeping the win (and the path to the next game) actually reachable.
+    this.bossPower = randInt(25, 45) + Math.round(this.count * 0.2);
 
     const px = this.crowdX();
     // Frame the floating cue as evaluating the EXPRESSION at a value

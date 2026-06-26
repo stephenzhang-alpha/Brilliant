@@ -35,7 +35,8 @@ export function GatesPage() {
         <div className="mt-5">
           <GateRunner
             onWin={(count) => {
-              addOverall(count, 'gates');
+              // Each surviving crowd member is worth 10 overall points.
+              addOverall(count * 10, 'gates');
               completeStage(3);
             }}
             onAdvance={() => navigate('/pins')}

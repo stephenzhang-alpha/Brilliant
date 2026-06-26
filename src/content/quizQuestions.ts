@@ -12,68 +12,67 @@ export interface Quiz {
 
 /**
  * VARIABLES bank — used by the landing-page gate (Page 0) and recycled as the
- * "+1000 points" reinforcement checks inside the Dino run (Page 1). All are
- * plain-text / Unicode math to match the rest of the app (no KaTeX).
+ * every-300-to-500-points reinforcement checks inside the Dino run (Page 1).
+ * Framing: a variable is a LETTER that stands for a number (one we do not know
+ * yet, or that can stand for different values) — not "a value that changes."
+ * All plain-text / Unicode math to match the rest of the app (no KaTeX).
  */
 export const VARIABLE_QUESTIONS: Quiz[] = [
   {
     id: 'what-is-variable',
     question: 'Which of these is a variable?',
-    prompt: "Remember: a variable's value can change.",
+    prompt: 'A variable is a letter that stands for a number.',
     columns: 3,
     options: [
-      { id: 'score', label: 'Your score', hint: 'it keeps changing as you run', correct: true },
+      { id: 'x', label: 'x', hint: 'a letter that stands for a number', correct: true },
       {
         id: 'seven',
-        label: 'The number 7',
-        hint: 'it is always exactly 7',
+        label: '7',
+        hint: 'a fixed number',
         correct: false,
         feedback:
-          '7 is always 7 — its value never changes, so it is a constant, not a variable. A variable is a value that CAN change.',
+          '7 is a constant — it always means 7. A variable is a letter (like x) that stands for a number.',
       },
       {
-        id: 'red',
-        label: 'The color red',
-        hint: 'a color, not a changing amount',
+        id: 'plus',
+        label: '+',
+        hint: 'an operation',
         correct: false,
-        feedback:
-          'A color is not an amount that changes. A variable is a quantity whose value can change — like a score going up.',
+        feedback: '+ is an operation (it means add). A variable is a letter, like x, that stands for a number.',
       },
     ],
   },
   {
-    id: 'variable-value',
+    id: 'variable-def',
     question: 'A variable is best described as…',
     columns: 2,
     options: [
-      {
-        id: 'changes',
-        label: 'A named value that can change',
-        correct: true,
-      },
+      { id: 'letter', label: 'A letter that stands for a number', correct: true },
       {
         id: 'fixed',
         label: 'A number that never changes',
         correct: false,
-        feedback: 'That describes a constant. A variable can take on different values.',
+        feedback:
+          'That describes a constant. A variable is a letter that stands for a number — often one we do not know yet.',
       },
       {
-        id: 'symbol',
+        id: 'op',
         label: 'A plus or minus sign',
         correct: false,
-        feedback: 'Those are operations. A variable is a named quantity, usually a letter like x.',
+        feedback: 'Those are operations. A variable is a letter (like x) that represents a number.',
       },
       {
         id: 'shape',
-        label: 'A type of shape',
+        label: 'A kind of shape',
         correct: false,
-        feedback: 'Not quite — a variable is a value (often written as a letter), not a shape.',
+        feedback: 'Not quite — a variable is a letter that stands for a number, not a shape.',
       },
     ],
   },
   {
     id: 'evaluate-n-plus-3',
     question: 'If n = 10, what is n + 3?',
+    prompt: 'Here the variable n stands for the number 10.',
     columns: 3,
     options: [
       { id: '13', label: '13', correct: true },
@@ -81,13 +80,13 @@ export const VARIABLE_QUESTIONS: Quiz[] = [
         id: '103',
         label: '103',
         correct: false,
-        feedback: 'n stands for the value 10, so n + 3 means 10 + 3, not "10 and a 3" stuck together.',
+        feedback: 'n stands for the number 10, so n + 3 means 10 + 3 = 13 (not "10 and a 3" joined).',
       },
       {
         id: '30',
         label: '30',
         correct: false,
-        feedback: 'That would be n × 3. Here we add 3 to n: 10 + 3.',
+        feedback: 'That would be n × 3. Here we add: 10 + 3 = 13.',
       },
     ],
   },
@@ -96,38 +95,44 @@ export const VARIABLE_QUESTIONS: Quiz[] = [
     question: 'Which symbol is most often used as a variable?',
     columns: 3,
     options: [
-      { id: 'x', label: 'x', correct: true },
+      { id: 'x', label: 'x', hint: 'a letter', correct: true },
       {
         id: 'plus',
         label: '+',
         correct: false,
-        feedback: '+ is an operation (add). Variables are usually letters like x, y, or n.',
+        feedback: '+ is an operation. Variables are letters like x, y, or n.',
       },
       {
         id: 'equals',
         label: '=',
         correct: false,
-        feedback: '= means "equals". Variables are usually letters like x, y, or n.',
+        feedback: '= means "equals". Variables are letters like x, y, or n.',
       },
     ],
   },
   {
-    id: 'value-can',
-    question: "A variable's value can…",
-    columns: 3,
+    id: 'variable-true',
+    question: 'Which statement about a variable is true?',
+    columns: 2,
     options: [
-      { id: 'change', label: 'Change', hint: 'that is the whole point', correct: true },
+      { id: 'stands', label: 'It can stand for different numbers', correct: true },
       {
-        id: 'never',
-        label: 'Never change',
+        id: 'always1',
+        label: 'It is always 1',
         correct: false,
-        feedback: 'A value that never changes is a constant. A variable can change.',
+        feedback: 'A variable is not stuck on one number — it stands for a number that can differ.',
       },
       {
-        id: 'only7',
-        label: 'Only ever be 7',
+        id: 'neverletter',
+        label: 'It can never be a letter',
         correct: false,
-        feedback: 'A variable is not stuck on one number — it can take many values.',
+        feedback: 'A variable is usually written as a letter, like x.',
+      },
+      {
+        id: 'add',
+        label: 'It always means add',
+        correct: false,
+        feedback: '"Add" is the + operation. A variable is a letter that stands for a number.',
       },
     ],
   },
@@ -144,7 +149,7 @@ export const EXPRESSION_QUESTIONS: Quiz[] = [
     prompt: 'Multiply first, then add.',
     columns: 2,
     options: [
-      { id: '14', label: '14', hint: '3 × 4 = 12, then + 2', correct: true },
+      { id: '14', label: '14', correct: true },
       {
         id: '9',
         label: '9',
@@ -155,13 +160,13 @@ export const EXPRESSION_QUESTIONS: Quiz[] = [
         id: '18',
         label: '18',
         correct: false,
-        feedback: 'That is 3 × (4 + 2). Multiply before you add: 3 × 4 = 12, then + 2 = 14.',
+        feedback: 'That is 3 × (4 + 2). Multiply before you add: do 3 × 4 first, then add 2.',
       },
       {
         id: '10',
         label: '10',
         correct: false,
-        feedback: 'Close — that subtracts the 2. The expression adds it: 12 + 2 = 14.',
+        feedback: 'Close — that subtracts the 2. The expression adds it instead.',
       },
     ],
   },
@@ -214,6 +219,103 @@ export const EXPRESSION_QUESTIONS: Quiz[] = [
         label: '23x',
         correct: false,
         feedback: 'Just add the coefficients: 3 + 2 = 5, giving 5x.',
+      },
+    ],
+  },
+];
+
+/**
+ * EQUATIONS & INEQUALITIES bank — used by the Scales intro page (Page 5), where
+ * a balanced scale means the two sides are equal and a tilt means one side is
+ * greater. Leads into the Balance game.
+ */
+export const EQUATION_QUESTIONS: Quiz[] = [
+  {
+    id: 'balanced-means-equal',
+    question: 'A balanced (level) scale shows that the two sides are…',
+    prompt: 'Think about what "balanced" means.',
+    columns: 3,
+    options: [
+      { id: 'equal', label: 'Equal', hint: 'same weight on both', correct: true },
+      {
+        id: 'left',
+        label: 'Left is bigger',
+        correct: false,
+        feedback: 'If the left were bigger, that pan would sink — the scale would tilt, not stay level.',
+      },
+      {
+        id: 'right',
+        label: 'Right is bigger',
+        correct: false,
+        feedback: 'If the right were bigger, that pan would sink. A level scale means the sides are equal.',
+      },
+    ],
+  },
+  {
+    id: 'left-sinks',
+    question: 'If the left pan sinks lower, then…',
+    prompt: 'The heavier side drops.',
+    columns: 3,
+    options: [
+      { id: 'gt', label: 'left > right', hint: 'heavier side drops', correct: true },
+      {
+        id: 'lt',
+        label: 'left < right',
+        correct: false,
+        feedback: 'The pan that sinks is the HEAVIER side, so the left side is greater, not less.',
+      },
+      {
+        id: 'eq',
+        label: 'left = right',
+        correct: false,
+        feedback: 'Equal sides keep the scale level. A sinking pan means that side is greater.',
+      },
+    ],
+  },
+  {
+    id: 'solve-x-plus-3',
+    question: 'Balance it: x + 3 = 7. What is x?',
+    prompt: 'What value of x makes both sides weigh the same?',
+    columns: 3,
+    options: [
+      { id: '4', label: '4', hint: '4 + 3 = 7', correct: true },
+      {
+        id: '10',
+        label: '10',
+        correct: false,
+        feedback: 'That is too heavy: 10 + 3 = 13. You need x so that x + 3 = 7, which is x = 4.',
+      },
+      {
+        id: '3',
+        label: '3',
+        correct: false,
+        feedback: 'Close — 3 + 3 = 6, still a little light. x = 4 gives 4 + 3 = 7.',
+      },
+    ],
+  },
+  {
+    id: 'keep-balanced',
+    question: 'Which keeps a level scale balanced?',
+    columns: 2,
+    options: [
+      { id: 'both', label: 'Add the same weight to BOTH sides', correct: true },
+      {
+        id: 'one',
+        label: 'Add weight to one side',
+        correct: false,
+        feedback: 'Adding to just one side makes it heavier and tips the scale. Do the same to both sides to stay balanced.',
+      },
+      {
+        id: 'remove',
+        label: 'Remove weight from one side',
+        correct: false,
+        feedback: 'Removing from one side makes it lighter and tips the scale. Whatever you do, do it to both sides.',
+      },
+      {
+        id: 'never',
+        label: 'It can never stay balanced',
+        correct: false,
+        feedback: 'It can! As long as you change both sides the same way, the balance holds.',
       },
     ],
   },

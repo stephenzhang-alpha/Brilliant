@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { MagicAssistant } from '../assistant/MagicAssistant';
 
 export interface QuizOption {
   id: string;
@@ -23,6 +24,10 @@ interface Props {
   ctaLabel?: string;
   /** Column count for the option grid. Defaults to 2. */
   columns?: 2 | 3;
+  /** Lesson topic passed to the AI assistant for better hints (e.g. "variables"). */
+  topic?: string;
+  /** Optional override for the assistant's name. */
+  assistantName?: string;
 }
 
 /**
@@ -41,6 +46,8 @@ export function ConceptCheck({
   badge,
   ctaLabel = 'Continue →',
   columns = 2,
+  topic,
+  assistantName,
 }: Props) {
   const [wrongPick, setWrongPick] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -115,15 +122,17 @@ export function ConceptCheck({
       </div>
 
       {wrongOption && (
-        <div className="mt-3 flex items-start gap-2 rounded-xl border border-coral/30 bg-coral/10 px-3 py-2 animate-fadein">
-          <span className="text-lg leading-none" aria-hidden>
-            💡
-          </span>
-          <p className="text-sm text-text">
-            {wrongOption.feedback ?? 'Not quite — take another look.'}{' '}
-            <span className="font-semibold text-text-muted">Give it another try!</span>
-          </p>
-        </div>
+        <MagicAssistant
+          key={wrongOption.id}
+          topic={topic}
+          question={question}
+          prompt={prompt}
+          options={options.map((o) => o.label)}
+          userPickLabel={wrongOption.label}
+          correctLabel={options.find((o) => o.correct)?.label ?? ''}
+          fallback={wrongOption.feedback}
+          name={assistantName}
+        />
       )}
     </div>
   );

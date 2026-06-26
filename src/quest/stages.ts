@@ -22,6 +22,8 @@ export const STAGES: Stage[] = [
   { index: 2, path: '/expressions', label: 'Expressions', short: 'Expr', icon: '🧩' },
   { index: 3, path: '/gates', label: 'Gate Runner', short: 'Gates', icon: '🚪' },
   { index: 4, path: '/pins', label: 'Pull the Pins', short: 'Pins', icon: '📌' },
+  { index: 5, path: '/scales', label: 'Equations & Inequalities', short: 'Scales', icon: '⚖️' },
+  { index: 6, path: '/balance', label: 'Balance Game', short: 'Balance', icon: '🎯' },
 ];
 
 /** Path of a stage by index, clamped to the valid range. */

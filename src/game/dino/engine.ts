@@ -175,10 +175,13 @@ export class DinoGame {
   obstaclesEnabled = true;
   /** Draws an attention ring around the score / high score (tutorial). */
   highlightScore = false;
-  /** When true the running simulation freezes (used for the +1000 reinforcement
+  /** When true the running simulation freezes (used for the reinforcement
    *  question): particles keep animating but the world, score, and obstacles
    *  hold until the React layer clears it. */
   paused = false;
+  /** Seconds of post-checkpoint grace: while > 0 collisions are ignored and the
+   *  dino blinks. Set by the React layer after a correct checkpoint answer. */
+  immuneTimer = 0;
 
   // Dino state
   private dinoY = GROUND_Y - DINO_HEIGHT;
@@ -251,6 +254,7 @@ export class DinoGame {
   reset() {
     this.status = 'ready';
     this.paused = false;
+    this.immuneTimer = 0;
     this.score = 0;
     this.scoreFloat = 0;
     this.distance = 0;
@@ -389,6 +393,9 @@ export class DinoGame {
     // world, score, and obstacles hold until the React layer clears `paused`.
     if (this.paused) return;
 
+    // Post-checkpoint grace counts down only during live play.
+    if (this.immuneTimer > 0) this.immuneTimer = Math.max(0, this.immuneTimer - dt);
+
     // Speed + score
     this.speed = Math.min(SPEED_MAX, this.speed + SPEED_ACCEL * dt);
     const move = this.speed * dt;
@@ -442,11 +449,15 @@ export class DinoGame {
         this.nextSpawnDistance = this.distance + gap;
       }
 
-      const dinoBox = this.getDinoHitbox();
-      for (const o of this.obstacles) {
-        if (intersects(dinoBox, this.getObstacleHitbox(o))) {
-          this.gameOver();
-          break;
+      // Obstacles keep coming during the post-checkpoint grace, but they
+      // cannot kill the dino until the immunity window elapses.
+      if (this.immuneTimer <= 0) {
+        const dinoBox = this.getDinoHitbox();
+        for (const o of this.obstacles) {
+          if (intersects(dinoBox, this.getObstacleHitbox(o))) {
+            this.gameOver();
+            break;
+          }
         }
       }
     }
@@ -614,22 +625,26 @@ export class DinoGame {
       else drawBird(ctx, o.x, o.y, o.w, o.h, birdC, this.tick);
     }
 
-    // Dino (brand violet) with squash & stretch anchored at its feet.
+    // Dino (brand violet) with squash & stretch anchored at its feet. While the
+    // post-checkpoint immunity is active the dino blinks (hidden on alt frames).
+    const blink = this.immuneTimer > 0 && Math.floor(this.tick * 0.25) % 2 === 0;
     const pose = this.poseForDraw();
     const q = this.squash;
-    if (Math.abs(q) > 0.002) {
-      const spriteW = pose === 'duck' ? DINO_DUCK_WIDTH : DINO_WIDTH;
-      const spriteH = pose === 'duck' ? DINO_DUCK_HEIGHT : DINO_HEIGHT;
-      const anchorX = DINO_X + spriteW / 2;
-      const anchorY = this.dinoY + spriteH;
-      ctx.save();
-      ctx.translate(anchorX, anchorY);
-      ctx.scale(1 + q * SQUASH_SCALE_X, 1 - q * SQUASH_SCALE_Y);
-      ctx.translate(-anchorX, -anchorY);
-      drawDino(ctx, DINO_X, this.dinoY, dinoC, eyeC, pose, this.tick);
-      ctx.restore();
-    } else {
-      drawDino(ctx, DINO_X, this.dinoY, dinoC, eyeC, pose, this.tick);
+    if (!blink) {
+      if (Math.abs(q) > 0.002) {
+        const spriteW = pose === 'duck' ? DINO_DUCK_WIDTH : DINO_WIDTH;
+        const spriteH = pose === 'duck' ? DINO_DUCK_HEIGHT : DINO_HEIGHT;
+        const anchorX = DINO_X + spriteW / 2;
+        const anchorY = this.dinoY + spriteH;
+        ctx.save();
+        ctx.translate(anchorX, anchorY);
+        ctx.scale(1 + q * SQUASH_SCALE_X, 1 - q * SQUASH_SCALE_Y);
+        ctx.translate(-anchorX, -anchorY);
+        drawDino(ctx, DINO_X, this.dinoY, dinoC, eyeC, pose, this.tick);
+        ctx.restore();
+      } else {
+        drawDino(ctx, DINO_X, this.dinoY, dinoC, eyeC, pose, this.tick);
+      }
     }
 
     // Particles (dust, confetti, debris) ride on top of the world layer.

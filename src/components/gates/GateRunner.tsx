@@ -177,7 +177,10 @@ export function GateRunner({ onWin, onLose, onAdvance, active = true }: Props) {
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const engine = engineRef.current;
     if (!engine) return;
-    // Don't steer through the pop-ups — let the overlay buttons handle taps.
+    // Don't steer through any overlay — let the teach/eval/finish buttons handle
+    // their own taps. (On 'complete' especially, capturing the pointer here
+    // would swallow the finish card's button clicks.)
+    if (engine.status === 'complete') return;
     if (engine.status === 'running' && engine.phase !== 'run') return;
     engine.primary();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -391,13 +394,21 @@ export function GateRunner({ onWin, onLose, onAdvance, active = true }: Props) {
         )}
 
         {status === 'complete' && won && (
-          <div className="absolute inset-0 flex items-center justify-center px-6 animate-fadein">
+          <div
+            className="absolute inset-0 flex items-center justify-center px-6 animate-fadein"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+          >
             <div className="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl">
               <p className="text-3xl">{headlineEmoji}</p>
               <p className="font-display tracking-[0.25em] text-text-muted text-xs font-bold mt-1">{headline}</p>
               <p className="text-text text-sm mt-2">Your crowd survived the boss with</p>
               <p className="font-display text-primary text-5xl font-extrabold tabular-nums leading-none mt-1">
                 {finalCount.toLocaleString()}
+              </p>
+              <p className="text-text-muted text-[13px] mt-1.5">
+                Each survivor is worth <b className="text-primary">10 points</b> →{' '}
+                <b className="text-success">+{(finalCount * 10).toLocaleString()}</b> to your total
               </p>
               {recap && (
                 <p className="text-text-muted text-[13px] mt-2">
@@ -431,7 +442,11 @@ export function GateRunner({ onWin, onLose, onAdvance, active = true }: Props) {
         )}
 
         {status === 'complete' && !won && (
-          <div className="absolute inset-0 flex items-center justify-center px-6 animate-fadein">
+          <div
+            className="absolute inset-0 flex items-center justify-center px-6 animate-fadein"
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
+          >
             <div className="bg-white rounded-2xl px-8 py-6 text-center shadow-2xl">
               <p className="text-3xl">💀</p>
               <p className="font-display tracking-[0.25em] text-coral text-xs font-bold mt-1">WIPED OUT</p>
