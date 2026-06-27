@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import pipIdle from '../../assets/assistant/pip-idle.png';
 import pipExplaining from '../../assets/assistant/pip-explaining.png';
 import { isAssistantAvailable, streamQuestionHelp } from '../../firebase/ai';
+import { useAssistantStore } from '../../stores/assistantStore';
 
 interface MagicAssistantProps {
   /** Lesson topic, e.g. "variables" or "equations and inequalities". */
@@ -80,13 +81,18 @@ export function MagicAssistant({
   const reqIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
+  // While we're mounted, Pip is "away" from her logo seat (down here helping).
+  const enter = useAssistantStore((s) => s.enter);
+  const leave = useAssistantStore((s) => s.leave);
   useEffect(() => {
     mountedRef.current = true;
+    enter();
     return () => {
       mountedRef.current = false;
       abortRef.current?.abort();
+      leave();
     };
-  }, []);
+  }, [enter, leave]);
 
   const explainAnotherWay = async () => {
     const id = ++reqIdRef.current;
@@ -114,8 +120,8 @@ export function MagicAssistant({
 
   return (
     <div className="mt-5 flex items-start gap-2 sm:gap-3">
-      {/* Pip — a free-floating character that swoops in and hovers (no box) */}
-      <div className="animate-pip-fly relative shrink-0">
+      {/* Pip — drops down from her logo seat and hovers (no box) */}
+      <div className="animate-pip-drop relative shrink-0">
         {/* magical glow */}
         <div
           aria-hidden

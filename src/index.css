@@ -85,15 +85,16 @@ h1, h2, h3, .font-display { font-family: var(--font-display); }
 }
 .animate-rankpop { animation: rank-pop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
-/* "Pip" the tutor swoops in from the side, overshoots, then settles to rest.
-   Kept to a modest in-bounds offset so host pages' overflow-hidden can't clip it. */
-@keyframes pip-fly-in {
-  0%   { opacity: 0; transform: translate(-60px, 16px) rotate(-14deg) scale(0.55); }
-  55%  { opacity: 1; transform: translate(8px, -6px) rotate(5deg) scale(1.08); }
-  78%  { transform: translate(-2px, 2px) rotate(-2deg) scale(0.98); }
+/* "Pip" drops down from her logo seat (top-left) to the question and settles
+   with a little bounce. Kept to a modest in-bounds offset so host pages'
+   overflow-hidden can't clip it. */
+@keyframes pip-drop-in {
+  0%   { opacity: 0; transform: translate(-30px, -130px) rotate(-10deg) scale(0.5); }
+  60%  { opacity: 1; transform: translate(6px, 10px) rotate(4deg) scale(1.08); }
+  80%  { transform: translate(-2px, -4px) rotate(-2deg) scale(0.97); }
   100% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
 }
-.animate-pip-fly { animation: pip-fly-in 0.72s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-pip-drop { animation: pip-drop-in 0.78s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 /* A one-shot sparkle ring that bursts outward as Pip lands (base state hidden,
    so reduced-motion users simply never see it). */
@@ -125,7 +126,7 @@ h1, h2, h3, .font-display { font-family: var(--font-display); }
     animation: none !important;
   }
   .animate-pop, .animate-floatup, .animate-rankpop, .animate-fadein, .animate-toast,
-  .animate-pip-fly, .animate-bubble-in {
+  .animate-pip-drop, .animate-bubble-in {
     animation-duration: 0.01ms !important;
   }
 }

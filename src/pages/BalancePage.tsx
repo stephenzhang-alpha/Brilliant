@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BalanceGame } from '../components/balance/BalanceGame';
 import { useOverallStore } from '../stores/overallStore';
@@ -18,9 +19,13 @@ export function BalancePage() {
   // The finale is driven by the PERSISTED quest-complete flag (not local state),
   // so it survives a reload / remount once the last puzzle is solved.
   const questComplete = useOverallStore((s) => s.questComplete);
+  // After the quest is finished the persisted finale shows by default; "Play
+  // again" drops back into a fresh run, and finishing it returns to the finale.
+  const [replaying, setReplaying] = useState(false);
 
   const handleComplete = () => {
     completeStage(6);
+    setReplaying(false);
   };
 
   return (
@@ -41,7 +46,7 @@ export function BalancePage() {
           </p>
         </div>
 
-        {questComplete ? (
+        {questComplete && !replaying ? (
           <div className="mt-6 animate-fadein">
             <div className="mx-auto max-w-sm rounded-3xl bg-surface p-7 text-center shadow-2xl ring-1 ring-primary/20 animate-pop">
               <p className="text-5xl">🏆</p>
@@ -75,6 +80,13 @@ export function BalancePage() {
                     Back to the start →
                   </Link>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setReplaying(true)}
+                  className="btn-pop rounded-xl border-2 border-primary/30 bg-surface px-7 py-3 font-display font-bold text-primary"
+                >
+                  Play the balance game again
+                </button>
               </div>
             </div>
           </div>

@@ -4,6 +4,8 @@ import { useOverallStore } from '../../stores/overallStore';
 import { STAGES } from '../../quest/stages';
 import { ScoreChip } from '../score/ScoreChip';
 import { LEADERBOARD_ENABLED } from '../../config/features';
+import { useAssistantStore } from '../../stores/assistantStore';
+import pipIdle from '../../assets/assistant/pip-idle.png';
 
 /**
  * The slim quest top-bar shown on every page. It renders the seven stages as a
@@ -16,6 +18,8 @@ export function QuestNav() {
   const { user, signOut } = useAuthStore();
   const unlockedStage = useOverallStore((s) => s.unlockedStage);
   const { pathname } = useLocation();
+  // Pip is the logo; when she's down helping at a missed question her seat empties.
+  const helping = useAssistantStore((s) => s.activeCount > 0);
 
   const pill =
     'flex items-center gap-1 rounded-full px-2 sm:px-2.5 py-1 text-xs sm:text-sm font-display font-semibold whitespace-nowrap transition-colors';
@@ -24,8 +28,23 @@ export function QuestNav() {
     <nav className="sticky top-0 z-50 bg-surface/85 backdrop-blur-md border-b-2 border-primary/15 shadow-[0_4px_20px_-8px_rgba(124,58,237,0.35)]">
       <div className="max-w-5xl mx-auto px-2 sm:px-4 h-14 flex items-center justify-between gap-1.5 sm:gap-2">
         <Link to="/" className="flex items-center gap-2 shrink-0" title="Algebra Quest — start">
-          <span aria-hidden className="text-2xl animate-bob">
-            🧮
+          <span aria-hidden className="relative grid h-9 w-9 shrink-0 place-items-center">
+            <img
+              src={pipIdle}
+              alt=""
+              className={`h-9 w-9 select-none object-contain transition-all duration-300 ${
+                helping ? 'scale-50 opacity-0' : 'animate-bob scale-100 opacity-100'
+              }`}
+              draggable={false}
+            />
+            {/* Pip's empty seat while she's down helping at a question */}
+            <span
+              className={`pointer-events-none absolute text-base transition-opacity duration-300 ${
+                helping ? 'animate-bob opacity-100' : 'opacity-0'
+              }`}
+            >
+              ✨
+            </span>
           </span>
           <span className="hidden lg:inline font-display font-bold text-lg bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             Algebra Quest
