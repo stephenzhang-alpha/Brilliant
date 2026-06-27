@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { BalanceGame } from '../components/balance/BalanceGame';
 import { useOverallStore } from '../stores/overallStore';
+import { LEADERBOARD_ENABLED } from '../config/features';
 
 /** Soft, light gradient so the light-styled balance scale and dark text pop. */
 const BALANCE_BG = 'linear-gradient(180deg, #ede9fe 0%, #f7e6ff 52%, #ffe7f3 100%)';
@@ -9,7 +10,7 @@ const BALANCE_BG = 'linear-gradient(180deg, #ede9fe 0%, #f7e6ff 52%, #ffe7f3 100
  * Page 7 (stage index 6) — the Balance Game, and the TERMINAL page of the
  * Algebra Quest. It hosts the run of weight-balancing puzzles and, once the
  * final puzzle is solved, completes the quest (`completeStage(6)`) and swaps in
- * an "Algebra Quest complete!" celebration with a route to the leaderboard.
+ * an "Algebra Quest complete!" celebration.
  */
 export function BalancePage() {
   const completeStage = useOverallStore((s) => s.completeStage);
@@ -59,12 +60,21 @@ export function BalancePage() {
                 </span>
               </div>
               <div className="mt-5 flex flex-col gap-2">
-                <Link
-                  to="/leaderboard"
-                  className="btn-pop animate-pulse rounded-xl bg-primary px-7 py-3 font-display font-bold text-white"
-                >
-                  See your rank on the leaderboard →
-                </Link>
+                {LEADERBOARD_ENABLED ? (
+                  <Link
+                    to="/leaderboard"
+                    className="btn-pop animate-pulse rounded-xl bg-primary px-7 py-3 font-display font-bold text-white"
+                  >
+                    See your rank on the leaderboard →
+                  </Link>
+                ) : (
+                  <Link
+                    to="/"
+                    className="btn-pop animate-pulse rounded-xl bg-primary px-7 py-3 font-display font-bold text-white"
+                  >
+                    Back to the start →
+                  </Link>
+                )}
               </div>
             </div>
           </div>

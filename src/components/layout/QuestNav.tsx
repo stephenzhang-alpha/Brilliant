@@ -3,6 +3,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useOverallStore } from '../../stores/overallStore';
 import { STAGES } from '../../quest/stages';
 import { ScoreChip } from '../score/ScoreChip';
+import { LEADERBOARD_ENABLED } from '../../config/features';
 
 /**
  * The slim quest top-bar shown on every page. It renders the seven stages as a
@@ -77,24 +78,29 @@ export function QuestNav() {
         </ol>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Link to="/leaderboard" className="shrink-0" title="Your rank & total score — leaderboard">
-            <ScoreChip />
-          </Link>
-          {user ? (
-            <button
-              onClick={() => void signOut()}
-              className="text-text-muted hover:text-text text-xs sm:text-sm whitespace-nowrap"
-            >
-              Sign out
-            </button>
-          ) : (
-            <Link
-              to="/signup"
-              className="btn-pop bg-primary text-white text-xs sm:text-sm font-display font-bold rounded-xl px-3 py-1.5 whitespace-nowrap"
-            >
-              Sign up
+          {LEADERBOARD_ENABLED ? (
+            <Link to="/leaderboard" className="shrink-0" title="Your rank & total score — leaderboard">
+              <ScoreChip />
             </Link>
+          ) : (
+            <ScoreChip className="shrink-0" />
           )}
+          {LEADERBOARD_ENABLED &&
+            (user ? (
+              <button
+                onClick={() => void signOut()}
+                className="text-text-muted hover:text-text text-xs sm:text-sm whitespace-nowrap"
+              >
+                Sign out
+              </button>
+            ) : (
+              <Link
+                to="/signup"
+                className="btn-pop bg-primary text-white text-xs sm:text-sm font-display font-bold rounded-xl px-3 py-1.5 whitespace-nowrap"
+              >
+                Sign up
+              </Link>
+            ))}
         </div>
       </div>
     </nav>

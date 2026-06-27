@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import pipIdle from '../../assets/assistant/pip-idle.png';
 import pipExplaining from '../../assets/assistant/pip-explaining.png';
-import { isAssistantAvailable, streamQuestionHelp, type HelpMode } from '../../firebase/ai';
+import { isAssistantAvailable, streamQuestionHelp } from '../../firebase/ai';
 
 interface MagicAssistantProps {
   /** Lesson topic, e.g. "variables" or "equations and inequalities". */
@@ -14,7 +14,10 @@ interface MagicAssistantProps {
   userPickLabel: string;
   /** The correct answer's label. */
   correctLabel: string;
-  /** Authored fallback used when the live AI is unavailable or errors. */
+  /**
+   * The authored, known-correct explanation for this wrong pick. Shown FIRST
+   * (deterministic), and used to ground the optional AI re-explanation.
+   */
   fallback?: string;
   /** Mascot name. */
   name?: string;
@@ -38,13 +41,18 @@ const BURST = [
   { ch: '✨', top: '80%', left: '10%' },
 ];
 
+type AiState = 'idle' | 'loading' | 'done' | 'error';
+
 /**
  * "Pip", a magical star-spirit assistant. When a student answers a concept check
  * wrong, Pip swoops in from the side (sparkle trail), bursts a ring of sparkles
  * as it lands, then hovers — untethered, no box — beside a tailed speech bubble.
- * On request it gives an AI hint or explanation (streamed, typing-effect). If the
- * live AI (Firebase AI Logic) is unavailable or errors, it gracefully shows the
- * authored `fallback` instead, so it always helps.
+ *
+ * Help is DETERMINISTIC-FIRST: Pip immediately shows the authored, known-correct
+ * tip for this wrong pick. Only if the student taps "Explain another way" do we
+ * call the live AI (Gemini) — and that call is grounded in the authored tip, so
+ * it just rephrases the same correct idea (no made-up math). If the AI is
+ * unavailable the button is simply hidden; the authored tip always stands.
  */
 export function MagicAssistant({
   topic,
@@ -56,20 +64,20 @@ export function MagicAssistant({
   fallback,
   name = 'Pip',
 }: MagicAssistantProps) {
-  const [mode, setMode] = useState<HelpMode | null>(null);
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [usedFallback, setUsedFallback] = useState(false);
+  const authored =
+    fallback ??
+    `Take another look${topic ? ` at ${topic}` : ''} — you've got this! Try a different answer.`;
+  const aiAvailable = isAssistantAvailable();
 
-  // Each request gets an id so a newer request (e.g. switching Hint -> Explain)
-  // supersedes an older in-flight stream's late updates. The component is keyed
-  // by the wrong pick upstream, so a brand-new wrong answer remounts it fresh.
+  const [aiState, setAiState] = useState<AiState>('idle');
+  const [aiText, setAiText] = useState('');
+
+  // Each request gets an id so a newer request supersedes an older in-flight
+  // stream's late updates. The student can also answer correctly mid-stream,
+  // which unmounts us (we only render for a wrong pick) — so track mount state
+  // and abort the Gemini stream on unmount instead of burning tokens / setting
+  // state on an unmounted component.
   const reqIdRef = useRef(0);
-
-  // The student can answer correctly mid-stream, which unmounts us (we're only
-  // rendered for a wrong pick). Track mount state + the active stream so we stop
-  // applying state updates and abort the Gemini stream on unmount instead of
-  // burning tokens and calling setState on an unmounted component.
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -80,49 +88,29 @@ export function MagicAssistant({
     };
   }, []);
 
-  const fallbackText = () =>
-    fallback ??
-    `Take another look${topic ? ` at ${topic}` : ''} — you've got this! Try a different answer.`;
-
-  const requestHelp = async (m: HelpMode) => {
+  const explainAnotherWay = async () => {
     const id = ++reqIdRef.current;
-    // Cancel any in-flight stream this request supersedes (Hint <-> Explain).
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setMode(m);
-    setText('');
-    setUsedFallback(false);
-    setLoading(true);
-
-    if (!isAssistantAvailable()) {
-      if (id === reqIdRef.current) {
-        setText(fallbackText());
-        setUsedFallback(true);
-        setLoading(false);
-      }
-      return;
-    }
+    setAiText('');
+    setAiState('loading');
 
     try {
       await streamQuestionHelp(
-        { topic, question, prompt, options, userPickLabel, correctLabel, mode: m },
+        { topic, question, prompt, options, userPickLabel, correctLabel, authoredExplanation: authored },
         (t) => {
-          if (mountedRef.current && id === reqIdRef.current) setText(t);
+          if (mountedRef.current && id === reqIdRef.current) setAiText(t);
         },
         controller.signal,
       );
-      if (mountedRef.current && id === reqIdRef.current) setLoading(false);
+      if (mountedRef.current && id === reqIdRef.current) setAiState('done');
     } catch {
-      if (mountedRef.current && id === reqIdRef.current) {
-        setText(fallbackText());
-        setUsedFallback(true);
-        setLoading(false);
-      }
+      if (mountedRef.current && id === reqIdRef.current) setAiState('error');
     }
   };
 
-  const pose = mode ? pipExplaining : pipIdle;
+  const pose = aiState === 'idle' ? pipIdle : pipExplaining;
 
   return (
     <div className="mt-5 flex items-start gap-2 sm:gap-3">
@@ -168,58 +156,49 @@ export function MagicAssistant({
           className="absolute -left-1.5 top-5 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-surface shadow-[-2px_2px_3px_rgba(124,58,237,0.06)]"
         />
         <div className="relative rounded-2xl bg-surface p-3 shadow-xl ring-1 ring-primary/15 sm:p-3.5">
-          {mode === null ? (
-            <>
-              <p className="text-sm font-semibold text-text">
-                Not quite — but mistakes are how the magic happens! ✨ Want a hand from {name}?
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  onClick={() => requestHelp('hint')}
-                  className="btn-pop rounded-full bg-primary px-4 py-1.5 text-sm font-display font-bold text-white"
-                >
-                  ✨ Give me a hint
-                </button>
-                <button
-                  onClick={() => requestHelp('explain')}
-                  className="btn-pop rounded-full border-2 border-primary/30 bg-surface px-4 py-1.5 text-sm font-display font-bold text-primary"
-                >
-                  📖 Explain it
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-primary">
-                <span aria-hidden>{mode === 'hint' ? '✨' : '📖'}</span>
-                {name}&apos;s {mode === 'hint' ? 'hint' : 'explanation'}
-                {usedFallback && (
-                  <span className="ml-1 rounded-full bg-amber/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">
-                    offline tip
-                  </span>
-                )}
-              </p>
+          {/* Deterministic, always-correct tip (shown immediately) */}
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-primary">
+            <span aria-hidden>✨</span>
+            {name}&apos;s tip
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-text">{authored}</p>
 
-              {loading && !text ? (
+          {/* Optional AI re-explanation, grounded in the tip above */}
+          {aiState !== 'idle' && (
+            <div className="mt-2.5 border-t border-black/5 pt-2">
+              <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-accent">
+                <span aria-hidden>🔮</span>
+                Another way
+              </p>
+              {aiState === 'error' ? (
+                <p className="mt-1 text-sm leading-relaxed text-text-muted">
+                  Hmm, I couldn&apos;t dream up another way just now — but the tip above still holds.
+                  Give it another try! ✨
+                </p>
+              ) : aiState === 'loading' && !aiText ? (
                 <p className="mt-1 animate-pulse text-sm text-text-muted">
-                  {name} is conjuring up some help… ✨
+                  {name} is thinking of another way… ✨
                 </p>
               ) : (
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-text" aria-live="polite">
-                  {text}
-                  {loading && <span className="ml-0.5 animate-pulse">▍</span>}
+                <p
+                  className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-text"
+                  aria-live="polite"
+                >
+                  {aiText}
+                  {aiState === 'loading' && <span className="ml-0.5 animate-pulse">▍</span>}
                 </p>
               )}
+            </div>
+          )}
 
-              {!loading && (
-                <button
-                  onClick={() => requestHelp(mode === 'hint' ? 'explain' : 'hint')}
-                  className="mt-2 text-xs font-semibold text-primary underline hover:text-primary-dark"
-                >
-                  {mode === 'hint' ? 'Explain it fully →' : 'Just a quick hint →'}
-                </button>
-              )}
-            </>
+          {/* Escalate to the live AI only on request */}
+          {aiAvailable && aiState !== 'loading' && (
+            <button
+              onClick={explainAnotherWay}
+              className="btn-pop mt-2.5 rounded-full bg-primary px-4 py-1.5 text-sm font-display font-bold text-white"
+            >
+              {aiState === 'idle' ? '🔮 Explain another way' : '🔮 Try another way'}
+            </button>
           )}
         </div>
       </div>
