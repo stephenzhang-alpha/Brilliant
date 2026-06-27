@@ -958,6 +958,9 @@
     var s = [ans]; for (var i = 0; i < distract.length && s.length < 4; i++) if (s.indexOf(distract[i]) < 0) s.push(distract[i]);
     return shuffle(s.slice(0, 4)).map(function (v) { return { label: v, correct: v === ans }; });
   }
+  // Render a coefficient·letter term, dropping a leading 1 ("1x" -> "x") and
+  // showing a 0 coefficient as a bare "0".
+  function xterm(coef, L) { return coef === 1 ? L : coef === 0 ? "0" : coef + L; }
 
   function makeQuestion(level) {
     // Difficulty scales by level, and every level MIXES variable-identification with
@@ -1121,12 +1124,12 @@
                 "Then add: " + (c * v) + " + " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 1) { c1 = rint(2, 6); c2 = rint(2, 6); s = c1 + c2;
-      return { concept: "Combine like terms", prompt: "Combine: <span class='ex'>" + c1 + L1 + " + " + c2 + L1 + "</span> = ?",
-        choices: symChoices(s + L1, [(s + 1) + L1, (c1 * c2) + L1, String(s), (s - 1) + L1]),
+      return { concept: "Combine like terms", prompt: "Combine: <span class='ex'>" + xterm(c1, L1) + " + " + xterm(c2, L1) + "</span> = ?",
+        choices: symChoices(xterm(s, L1), [xterm(s + 1, L1), xterm(c1 * c2, L1), String(s), xterm(s - 1, L1)]),
         nudge: "both terms have the same letter " + L1 + ", so just add the numbers in front.",
         steps: ["Both terms use the same variable " + L1,
                 "Add the numbers in front: " + c1 + " + " + c2 + " = " + s,
-                "Keep the " + L1 + ": <b>" + s + L1 + "</b>"] };
+                "Keep the " + L1 + ": <b>" + xterm(s, L1) + "</b>"] };
     }
     if (g === 2) { c = rint(2, 4); v = rint(3, 8); b = rint(2, c * v - 1); ans = c * v - b;
       return { concept: "Evaluate (order of ops)", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c + L1 + " − " + b + "</span>?", choices: numChoices(ans),
@@ -1136,12 +1139,12 @@
                 "Then subtract: " + (c * v) + " − " + b + " = <b>" + ans + "</b>"] };
     }
     if (g === 3) { c1 = rint(4, 9); c2 = rint(1, c1 - 1); s = c1 - c2;
-      return { concept: "Combine like terms", prompt: "Simplify: <span class='ex'>" + c1 + L1 + " − " + c2 + L1 + "</span> = ?",
-        choices: symChoices(s + L1, [(s + 1) + L1, (s - 1 < 0 ? 0 : s - 1) + L1, String(s), (c1 + c2) + L1]),
+      return { concept: "Combine like terms", prompt: "Simplify: <span class='ex'>" + xterm(c1, L1) + " − " + xterm(c2, L1) + "</span> = ?",
+        choices: symChoices(xterm(s, L1), [xterm(s + 1, L1), xterm(s - 1 < 0 ? 0 : s - 1, L1), String(s), xterm(c1 + c2, L1)]),
         nudge: "same letter " + L1 + " on both terms, so subtract the numbers in front.",
         steps: ["Both terms use the same variable " + L1,
                 "Subtract the numbers in front: " + c1 + " − " + c2 + " = " + s,
-                "Keep the " + L1 + ": <b>" + s + L1 + "</b>"] };
+                "Keep the " + L1 + ": <b>" + xterm(s, L1) + "</b>"] };
     }
     if (g === 4) { c1 = rint(2, 3); c2 = rint(2, 3); v = rint(2, 6); ans = (c1 + c2) * v;
       return { concept: "Combine, then evaluate", prompt: "If <b>" + L1 + " = " + v + "</b>, what is <span class='ex'>" + c1 + L1 + " + " + c2 + L1 + "</span>?", choices: numChoices(ans),
