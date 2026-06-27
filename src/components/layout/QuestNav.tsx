@@ -2,10 +2,10 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useOverallStore } from '../../stores/overallStore';
 import { STAGES } from '../../quest/stages';
-import { ScoreChip } from '../score/ScoreHud';
+import { ScoreChip } from '../score/ScoreChip';
 
 /**
- * The slim quest top-bar shown on every page. It renders the five stages as a
+ * The slim quest top-bar shown on every page. It renders the seven stages as a
  * stepper: the current page is highlighted, earlier (unlocked) pages are live
  * links so the player can freely go back and replay, and any page beyond
  * `unlockedStage` is shown locked (🔒) and is NOT a link — this is what stops

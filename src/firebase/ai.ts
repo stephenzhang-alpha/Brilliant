@@ -89,19 +89,24 @@ function buildPrompt(r: HelpRequest): string {
 
 /**
  * Stream the assistant's help. `onChunk` receives the cumulative text as it
- * arrives (for a typing effect). Resolves to the final text; throws if the
- * assistant is unavailable or the request fails (callers should fall back).
+ * arrives (for a typing effect). Pass an optional `signal` to cancel an
+ * in-flight stream (e.g. when the component unmounts) — aborting stops the
+ * stream loop and rejects with an `AbortError`. Resolves to the final text;
+ * throws if the assistant is unavailable or the request fails (callers should
+ * fall back).
  */
 export async function streamQuestionHelp(
   request: HelpRequest,
   onChunk: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const m = getModel();
   if (!m) throw new Error('assistant-unavailable');
 
-  const result = await m.generateContentStream(buildPrompt(request));
+  const result = await m.generateContentStream(buildPrompt(request), { signal });
   let text = '';
   for await (const chunk of result.stream) {
+    if (signal?.aborted) break;
     const piece = chunk.text();
     if (piece) {
       text += piece;

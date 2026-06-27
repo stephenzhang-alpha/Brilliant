@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BalanceGame } from '../components/balance/BalanceGame';
 import { useOverallStore } from '../stores/overallStore';
@@ -15,11 +14,12 @@ const BALANCE_BG = 'linear-gradient(180deg, #ede9fe 0%, #f7e6ff 52%, #ffe7f3 100
 export function BalancePage() {
   const completeStage = useOverallStore((s) => s.completeStage);
   const overall = useOverallStore((s) => s.overall);
-  const [done, setDone] = useState(false);
+  // The finale is driven by the PERSISTED quest-complete flag (not local state),
+  // so it survives a reload / remount once the last puzzle is solved.
+  const questComplete = useOverallStore((s) => s.questComplete);
 
   const handleComplete = () => {
     completeStage(6);
-    setDone(true);
   };
 
   return (
@@ -40,7 +40,7 @@ export function BalancePage() {
           </p>
         </div>
 
-        {done ? (
+        {questComplete ? (
           <div className="mt-6 animate-fadein">
             <div className="mx-auto max-w-sm rounded-3xl bg-surface p-7 text-center shadow-2xl ring-1 ring-primary/20 animate-pop">
               <p className="text-5xl">🏆</p>

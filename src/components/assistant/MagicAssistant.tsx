@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import pipIdle from '../../assets/assistant/pip-idle.png';
 import pipExplaining from '../../assets/assistant/pip-explaining.png';
 import { isAssistantAvailable, streamQuestionHelp, type HelpMode } from '../../firebase/ai';
@@ -66,12 +66,30 @@ export function MagicAssistant({
   // by the wrong pick upstream, so a brand-new wrong answer remounts it fresh.
   const reqIdRef = useRef(0);
 
+  // The student can answer correctly mid-stream, which unmounts us (we're only
+  // rendered for a wrong pick). Track mount state + the active stream so we stop
+  // applying state updates and abort the Gemini stream on unmount instead of
+  // burning tokens and calling setState on an unmounted component.
+  const abortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+
   const fallbackText = () =>
     fallback ??
     `Take another look${topic ? ` at ${topic}` : ''} — you've got this! Try a different answer.`;
 
   const requestHelp = async (m: HelpMode) => {
     const id = ++reqIdRef.current;
+    // Cancel any in-flight stream this request supersedes (Hint <-> Explain).
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setMode(m);
     setText('');
     setUsedFallback(false);
@@ -90,12 +108,13 @@ export function MagicAssistant({
       await streamQuestionHelp(
         { topic, question, prompt, options, userPickLabel, correctLabel, mode: m },
         (t) => {
-          if (id === reqIdRef.current) setText(t);
+          if (mountedRef.current && id === reqIdRef.current) setText(t);
         },
+        controller.signal,
       );
-      if (id === reqIdRef.current) setLoading(false);
+      if (mountedRef.current && id === reqIdRef.current) setLoading(false);
     } catch {
-      if (id === reqIdRef.current) {
+      if (mountedRef.current && id === reqIdRef.current) {
         setText(fallbackText());
         setUsedFallback(true);
         setLoading(false);

@@ -1,5 +1,5 @@
 /**
- * The five Algebra Quest pages, in order. The player walks them left-to-right;
+ * The seven Algebra Quest pages, in order. The player walks them left-to-right;
  * `useOverallStore.unlockedStage` is the index of the furthest page they may
  * open. Backward navigation and replay are always allowed (any index <=
  * unlockedStage); forward is blocked until the current page's task is done.

@@ -24,8 +24,27 @@ export function ScalesPage() {
 
   // The single source of truth for the interactive scale, kept in 0..10.
   const [x, setX] = useState(2);
-  const setXClamped = (v: number) =>
-    setX(Math.max(0, Math.min(10, Number.isFinite(v) ? Math.round(v) : 0)));
+  // Raw text backing the number field so the player can clear it or type partial
+  // values (e.g. backspacing) without x snapping to 0.
+  const [xInput, setXInput] = useState('2');
+
+  const clampX = (v: number) => Math.max(0, Math.min(10, Math.round(v)));
+
+  // Slider / programmatic updates always carry a valid number: move x and mirror
+  // it into the field.
+  const setXClamped = (v: number) => {
+    const c = clampX(v);
+    setX(c);
+    setXInput(String(c));
+  };
+
+  // Number field: keep the raw string for a live typing/empty state; only commit a
+  // clamped x when it parses to a finite number, and treat empty as "no change".
+  const onXInput = (raw: string) => {
+    setXInput(raw);
+    const n = Number(raw);
+    if (raw.trim() !== '' && Number.isFinite(n)) setX(clampX(n));
+  };
 
   const left = 2 * x + 3;
   const right = x + 7;
@@ -147,8 +166,9 @@ export function ScalesPage() {
                 type="number"
                 min={0}
                 max={10}
-                value={x}
-                onChange={(e) => setXClamped(Number(e.target.value))}
+                value={xInput}
+                onChange={(e) => onXInput(e.target.value)}
+                onBlur={() => setXInput(String(x))}
                 aria-label="x value (number)"
                 className="mt-1 w-24 rounded-xl border border-white/25 bg-white/10 px-3 py-2 text-center font-mono text-lg font-bold text-white outline-none focus:border-teal-200 focus:ring-2 focus:ring-teal-300/40"
               />

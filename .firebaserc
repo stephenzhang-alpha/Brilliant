@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "brilliant-1d239"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }

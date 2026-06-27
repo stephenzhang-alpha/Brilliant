@@ -4,7 +4,7 @@ interface ConfettiProps {
   /**
    * Fires a fresh burst whenever this changes to a new, non-empty value.
    * Pass the milestone you want to celebrate (e.g. a rank index or unlock id);
-   * null / 0 / '' mean "idle".
+   * null / '' mean "idle". 0 is a real value (e.g. stage/rank index 0) and fires.
    */
   token: string | number | null;
   /** Particle colors; defaults to the brand palette. */
@@ -55,7 +55,9 @@ export function Confetti({ token, colors = DEFAULT_COLORS, count = 90, origin }:
   useEffect(() => {
     const prev = prevTokenRef.current;
     prevTokenRef.current = token;
-    if (token === null || token === 0 || token === '' || token === prev) return;
+    // Idle = null / '' only. 0 is a valid token (stage/rank index 0) and must be
+    // able to fire; fire only when the token CHANGES to a non-idle value.
+    if (token === null || token === '' || token === prev) return;
     if (prefersReducedMotion()) return;
 
     const canvas = canvasRef.current;

@@ -1,120 +1,55 @@
-# Project Equation — Algebra 1 Learn-by-Doing
+# Algebra Quest
 
-**Subject: Algebra 1**
+A playful, single-page web game that teaches introductory algebra through a
+seven-stage journey — from variables to equations and inequalities. Built with
+React, TypeScript, Vite, Tailwind, and Firebase.
 
-A Brilliant-style interactive learning app that teaches Algebra 1 through hands-on manipulation. No videos, no memorization — drag equations, balance scales, and plot lines until algebra clicks.
+## The journey
 
-## Target User
+Seven gated pages — finish each to unlock the next; you can always go back and
+replay an earlier one:
 
-"Struggling Sam" (Age 14-15) — A high school freshman taking Algebra 1 who needs visual, tactile representations of abstract variables.
+1. **Variables** — an interactive intro with a concept check.
+2. **Dino Run** — an endless runner; every 300–500 points a variables checkpoint pops up.
+3. **Expressions** — a concept check on reading `ax + b`.
+4. **Gate Runner** — pick the gates that grow your crowd, then evaluate the expression to beat the boss.
+5. **Pull the Pins** — an embedded physics puzzle reinforcing variable thinking.
+6. **Equations & Inequalities** — scrub `x` on a live balance scale to build intuition.
+7. **Balance Game** — set `x` so the scale balances (inspired by SolveMe Mobiles).
 
-## Features (Phase 1 MVP)
+Along the way, **Pip** — an AI tutor sprite (Firebase AI Logic / Gemini) — flies
+in to offer a hint or explanation when you miss a concept check, with an authored
+fallback when the live model isn't available.
 
-- **Interactive Algebra Engine**
-  - Drag terms across equations — signs flip automatically
-  - Visual balance scale that tilts when unbalanced
-  - Coordinate grid plotter with draggable lines
-  - Number input and multiple choice for reinforcement
+Your **overall score** is the sum of your best runs, layered with a five-tier
+rank ladder and an optional global leaderboard (Firestore) when signed in.
 
-- **Instant Feedback**
-  - Every wrong answer gets a specific, helpful hint
-  - Escalating hints after repeated attempts
-  - Synthesis explanations after correct answers
-
-- **Progress & Persistence**
-  - Progress saves to Firestore — resume on any device
-  - Exact step restoration on return
-  - Sequential lesson unlock path
-
-- **Habit Loop**
-  - Daily streak tracking
-  - XP system with lesson rewards
-  - Milestone animations on completion
-
-- **5 Lessons in Progressive Path**
-  1. Variables & Expressions
-  2. One-Step Equations (drag)
-  3. Balancing Equations (scale)
-  4. Two-Step Equations (drag)
-  5. Graphing Linear Equations (plot)
-
-## Tech Stack
-
-- React 18 + TypeScript + Vite
-- Tailwind CSS (responsive/mobile-first)
-- Zustand (state management)
-- Firebase (Auth + Firestore + Hosting)
-- SVG + HTML5 drag-and-drop for interactions
-
-## Setup
+## Develop
 
 ```bash
-cd brilliant-algebra
 npm install
-cp .env.example .env
-# Fill in your Firebase project credentials in .env
-npm run dev
+npm run dev      # start the dev server
+npm run build    # type-check (tsc -b) + production build
+npm run lint     # eslint
+npm test         # vitest
 ```
 
-## Firebase Setup
+The app is a single Vite entry (`index.html` → `src/games-main.tsx` →
+`src/GamesApp.tsx`) using a `HashRouter`, so it deploys as static files with no
+server rewrites required.
 
-1. Create a Firebase project at https://console.firebase.google.com
-2. Enable Email/Password authentication
-3. Create a Firestore database
-4. Copy your web app config into `.env`
-5. Deploy: `firebase deploy`
+## Configuration
 
-## Architecture
+Firebase is optional — without it the quest still runs fully (scores persist
+locally and Pip uses authored fallbacks). To enable auth, the cloud leaderboard,
+and Pip's live AI, copy `.env.example` to `.env` and fill in your Firebase web
+config (the `VITE_FIREBASE_*` values); see `.env.example` for the full list.
 
-```
-src/
-├── components/
-│   ├── auth/           Auth forms and route guards
-│   ├── interactions/   TermDrag, ScaleBalance, GraphPlot, MultipleChoice, NumberInput
-│   ├── lesson/         LessonRenderer, StepRenderer, FeedbackPanel
-│   ├── course/         CourseMap with unlock logic
-│   ├── streak/         StreakCounter
-│   └── layout/         Navbar and Layout
-├── content/            Structured lesson data (JSON-as-code)
-├── stores/             Zustand stores (auth, progress, lesson)
-├── firebase/           Firebase config and helpers
-├── types/              TypeScript interfaces
-└── pages/              Route-level page components
-```
+## Deploy
 
-## Content Model
-
-Lessons are structured data objects with typed steps:
-- `concept` steps show explanatory text
-- `problem` steps render interactive components (TERM_DRAG, SCALE_BALANCE, GRAPH_PLOT, etc.)
-- `synthesis` steps wrap up with a conceptual summary
-
-Each problem has a `feedbackMatrix` mapping error types to specific hints.
-
-## Deployment
-
-### GitHub Pages (no backend required)
-
-Configured to deploy via GitHub Actions. The production build's base path is
-`/Brilliant/` (the repo name); override with the `VITE_BASE` env var if you rename
-the repo or add a custom domain.
-
-1. Commit and push to the `main` branch.
-2. In the repo: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-3. Ensure the repo is **Public** so others can open it.
-4. `.github/workflows/deploy.yml` builds and publishes automatically on each push.
-5. Live at: https://stephenzhang-alpha.github.io/Brilliant/
-
-When Firebase env vars are absent the app falls back to `localStorage`, so the
-public demo works for any visitor with zero setup (progress is per-browser).
-
-### Firebase Hosting (optional alternative)
+Built to `dist/` and hosted on Firebase Hosting:
 
 ```bash
-npm run build
-firebase deploy
+VITE_BASE=/ npm run build
+npx firebase-tools deploy --only hosting
 ```
-
-## No AI
-
-This MVP contains zero AI features. All content is hand-built, all feedback is deterministic, and all validation is client-side math. The app teaches entirely through its interactive design.

@@ -8,13 +8,7 @@
 // and night palettes.
 // ---------------------------------------------------------------------------
 
-import {
-  WORLD_WIDTH,
-  DINO_WIDTH,
-  DINO_HEIGHT,
-  DINO_DUCK_WIDTH,
-  DINO_DUCK_HEIGHT,
-} from './constants';
+import { WORLD_WIDTH } from './constants';
 
 export type DinoPose = 'idle' | 'run' | 'jump' | 'duck' | 'dead';
 
@@ -306,7 +300,3 @@ export function drawHills(
   ctx.closePath();
   ctx.fill();
 }
-
-// Re-export box dimensions so callers don't import constants twice.
-export const DINO_BOX = { w: DINO_WIDTH, h: DINO_HEIGHT };
-export const DINO_DUCK_BOX = { w: DINO_DUCK_WIDTH, h: DINO_DUCK_HEIGHT };

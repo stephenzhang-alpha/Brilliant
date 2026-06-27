@@ -21,6 +21,7 @@ export function PinsPage() {
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
       if (e.source !== frameRef.current?.contentWindow) return;
       const data = e.data;
       if (!data || typeof data !== 'object') return;

@@ -147,6 +147,8 @@ interface BalanceGameProps {
 export function BalanceGame({ onComplete, className = '' }: BalanceGameProps) {
   const [index, setIndex] = useState(0);
   const [x, setX] = useState(X_START);
+  /** Raw text for the number field so partial/empty input doesn't snap x to 0. */
+  const [xInput, setXInput] = useState(String(X_START));
   /** Highest puzzle index reached (for the progress dots / back-nav). */
   const [reached, setReached] = useState(0);
   const firedRef = useRef(false);
@@ -159,11 +161,25 @@ export function BalanceGame({ onComplete, className = '' }: BalanceGameProps) {
   const rightLabel = fmtSide(puzzle.rightA, puzzle.rightB);
   const solved = isSolved(puzzle.goal, left, right);
 
-  const assign = (value: number) => setX(clampX(value));
+  // Steppers / slider / resets carry a valid number: move x and mirror the field.
+  const assign = (value: number) => {
+    const c = clampX(value);
+    setX(c);
+    setXInput(String(c));
+  };
+
+  // Number field: keep the raw string for a live typing/empty state; only commit a
+  // clamped x when it parses to a finite number, and treat empty as "no change".
+  const onXInput = (raw: string) => {
+    setXInput(raw);
+    const n = Number(raw);
+    if (raw.trim() !== '' && Number.isFinite(n)) setX(clampX(n));
+  };
 
   const goToPuzzle = (i: number) => {
     setIndex(i);
     setX(X_START);
+    setXInput(String(X_START));
   };
 
   const goNext = () => {
@@ -270,8 +286,9 @@ export function BalanceGame({ onComplete, className = '' }: BalanceGameProps) {
               min={X_MIN}
               max={X_MAX}
               step={1}
-              value={x}
-              onChange={(e) => assign(Number(e.target.value))}
+              value={xInput}
+              onChange={(e) => onXInput(e.target.value)}
+              onBlur={() => setXInput(String(x))}
               aria-label="Value of x"
               className="w-20 bg-transparent text-center font-mono text-4xl font-black tabular-nums text-primary outline-none"
             />

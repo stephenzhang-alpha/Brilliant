@@ -7,24 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <title>Project Equation — Learn Algebra by Doing</title>
+    <title>Algebra Quest</title>
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      // Restore the route encoded by 404.html's SPA fallback (GitHub Pages).
-      (function () {
-        var l = window.location;
-        if (l.search[1] === '/') {
-          var decoded = l.search
-            .slice(1)
-            .split('&')
-            .map(function (s) { return s.replace(/~and~/g, '&'); })
-            .join('?');
-          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
-        }
-      })();
-    </script>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/games-main.tsx"></script>
   </body>
 </html>

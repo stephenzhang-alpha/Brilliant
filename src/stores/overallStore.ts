@@ -9,35 +9,39 @@ import { create } from 'zustand';
  *
  *     overall = best.dino + best.gates + best.tower
  *
- * Replaying a game only moves the needle when you beat your own record, so the
- * total is a clean, monotonic non-decreasing "show me your three best runs"
- * number rather than an ever-growing grind tally. Each game still calls
- * `add(runScore, source)` once per finished run; the store decides whether that
- * run set a new best and, if so, by how much the overall rose.
+ * (`tower` is the Pull-the-Pins / algebra-tower game's contribution.) Replaying a
+ * game only moves the needle when you beat your own record, so the total is a
+ * clean, monotonic non-decreasing "show me your best runs" number rather than an
+ * ever-growing grind tally. Each game still calls `add(runScore, source)` once
+ * per finished run; the store decides whether that run set a new best and, if so,
+ * by how much the overall rose.
  *
- * PROGRESSION is a single `unlockedStage` index (0..4) across the five quest
- * pages (Intro → Dino → Expressions → Gate Runner → Pull the Pins). The player
- * may freely revisit / replay any page with index <= unlockedStage, but never a
- * page beyond it. Completing a page's task calls `completeStage(index)`, which
- * raises `unlockedStage` to `index + 1` (monotonic) and fires a one-shot
- * celebration the UI can pick up via `justUnlockedStage`.
+ * PROGRESSION is a single `unlockedStage` index (0..STAGE_COUNT - 1) across the
+ * seven quest pages (Intro → Dino → Expressions → Gate Runner → Pull the Pins →
+ * Equations & Inequalities → Balance Game). The player may freely revisit /
+ * replay any page with index <= unlockedStage, but never a page beyond it.
+ * Completing a page's task calls `completeStage(index)`, which raises
+ * `unlockedStage` to `index + 1` (monotonic) and fires a one-shot celebration the
+ * UI can pick up via `justUnlockedStage`. Completing the final page has no page
+ * to unlock, so it instead sets the persisted `questComplete` flag (so the finale
+ * survives a reload).
  *
  * Layered on top of the total is a five-tier RANK ladder (Rookie -> Algebra
  * Legend), tuned to the bounded sum-of-bests range. Crossing into a new rank
  * fires a one-shot celebration the UI can pick up via `justRankedUp`.
  *
  * Persisted to localStorage (versioned + migrated) so the per-game bests, the
- * stage progression, and the best rank carry across sessions.
+ * stage progression, completion, and the best rank carry across sessions.
  */
 
 const KEY = 'algebra_overall_score';
-/** Persisted-schema version. Bump + migrate in `load` — never silently wipe saves. */
-const STORAGE_VERSION = 3;
+/** Persisted-schema version. Bump + migrate in `coercePersisted` — never silently wipe saves. */
+const STORAGE_VERSION = 4;
 
 /** Number of quest pages; `unlockedStage` is clamped to [0, STAGE_COUNT - 1]. */
 export const STAGE_COUNT = 7;
 
-export type ScoreSource = 'dino' | 'gates' | 'tower';
+type ScoreSource = 'dino' | 'gates' | 'tower';
 
 export interface Rank {
   name: string;
@@ -75,7 +79,7 @@ function rankIndexFor(overall: number): number {
   return idx;
 }
 
-export interface RankInfo {
+interface RankInfo {
   index: number;
   rank: Rank;
   /** The next rank up, or null when already at the top. */
@@ -124,6 +128,8 @@ interface Persisted {
   unlockedStage: number;
   /** Highest rank index ever reached, so promotions only celebrate once. */
   bestRank: number;
+  /** True once the player has finished the final page (the whole quest). */
+  questComplete: boolean;
 }
 
 interface OverallState extends Persisted {
@@ -149,7 +155,10 @@ interface OverallState extends Persisted {
   /** Total overall increase since this tab loaded (not persisted) — a session tally. */
   sessionGain: number;
   add: (points: number, source: ScoreSource) => void;
-  /** Mark page `index` complete, unlocking page `index + 1` (monotonic). */
+  /**
+   * Mark page `index` complete: unlock page `index + 1` (monotonic), or — for the
+   * final page — set the persisted `questComplete` flag.
+   */
   completeStage: (index: number) => void;
   clearJustUnlocked: () => void;
   clearRankUp: () => void;
@@ -165,6 +174,7 @@ function emptyPersisted(): Persisted {
     contributions: { dino: 0, gates: 0, tower: 0 },
     unlockedStage: 0,
     bestRank: 0,
+    questComplete: false,
   };
 }
 
@@ -179,11 +189,19 @@ function clampStage(v: number): number {
   return Math.max(0, Math.min(STAGE_COUNT - 1, Math.round(v)));
 }
 
-function load(): Persisted {
+/**
+ * Migrate any saved blob (any schema version) into a valid `Persisted`. Pure (no
+ * storage / no side effects) so it is unit-testable.
+ *
+ * Seeds the per-game bests from `bests` (v2+) when present, else falls back to
+ * the legacy `contributions` map (v1 stored accumulated totals there — the best
+ * available seed), else 0. v1 saves satisfy overall == sum(contributions), so
+ * recomputing overall from these seeds preserves the player's number across the
+ * upgrade rather than dropping it.
+ */
+export function coercePersisted(parsed: unknown): Persisted {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return emptyPersisted();
-    const p = JSON.parse(raw) as Partial<Persisted> & {
+    const p = (parsed ?? {}) as Partial<Persisted> & {
       bests?: Partial<Record<ScoreSource, number>>;
       contributions?: Partial<Record<ScoreSource, number>>;
       // Legacy (v1/v2) progression flags, read only to migrate forward.
@@ -191,11 +209,6 @@ function load(): Persisted {
       towerUnlocked?: boolean;
     };
 
-    // Seed the per-game bests from `bests` (v2+) when present, else fall back to
-    // the legacy `contributions` map (v1 stored accumulated totals there — the
-    // best available seed), else 0. v1 saves satisfy overall == sum(contributions),
-    // so recomputing overall from these seeds preserves the player's number
-    // across the upgrade rather than dropping it.
     const seed: Partial<Record<ScoreSource, number>> = p.bests ?? p.contributions ?? {};
     const bests: Record<ScoreSource, number> = {
       dino: safeScore(seed.dino),
@@ -204,10 +217,10 @@ function load(): Persisted {
     };
     const overall = bests.dino + bests.gates + bests.tower;
 
-    // Migrate progression: v3 stores `unlockedStage` directly; older saves only
-    // had the gatesUnlocked / towerUnlocked booleans, so map them onto the new
-    // five-page index (tower done => can reach Pull the Pins; gates done => can
-    // reach Gate Runner) so returning players never lose ground.
+    // Migrate progression: v3+ stores `unlockedStage` directly; older saves only
+    // had the gatesUnlocked / towerUnlocked booleans, so map them onto the stage
+    // index (tower done => can reach Pull the Pins; gates done => can reach Gate
+    // Runner) so returning players never lose ground.
     const legacyStage = p.towerUnlocked ? 4 : p.gatesUnlocked ? 3 : 0;
     const unlockedStage =
       typeof p.unlockedStage === 'number' ? clampStage(p.unlockedStage) : legacyStage;
@@ -222,7 +235,18 @@ function load(): Persisted {
       // the player already earned — and, after the re-tuned thresholds, never
       // demote them below the rank their score now qualifies for.
       bestRank: Math.max(typeof p.bestRank === 'number' ? p.bestRank : 0, rankIndexFor(overall)),
+      questComplete: p.questComplete === true,
     };
+  } catch {
+    return emptyPersisted();
+  }
+}
+
+function load(): Persisted {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return emptyPersisted();
+    return coercePersisted(JSON.parse(raw));
   } catch {
     return emptyPersisted();
   }
@@ -238,13 +262,14 @@ function save(p: Persisted) {
 
 const initial = load();
 
-export const useOverallStore = create<OverallState>((set, get) => ({
+export const useOverallStore = create<OverallState>((set) => ({
   version: initial.version,
   overall: initial.overall,
   bests: initial.bests,
   contributions: initial.contributions,
   unlockedStage: initial.unlockedStage,
   bestRank: initial.bestRank,
+  questComplete: initial.questComplete,
   lastGain: null,
   justUnlockedStage: null,
   justRankedUp: null,
@@ -271,6 +296,7 @@ export const useOverallStore = create<OverallState>((set, get) => ({
         contributions: { ...bests },
         unlockedStage: s.unlockedStage,
         bestRank: Math.max(s.bestRank, reached),
+        questComplete: s.questComplete,
       };
       save(next);
       return {
@@ -284,19 +310,25 @@ export const useOverallStore = create<OverallState>((set, get) => ({
   },
 
   completeStage: (index) => {
-    const s = get();
-    const target = clampStage(index + 1);
-    if (s.unlockedStage >= target) return; // already reached — don't re-celebrate
-    const next: Persisted = {
-      version: STORAGE_VERSION,
-      overall: s.overall,
-      bests: s.bests,
-      contributions: s.contributions,
-      unlockedStage: target,
-      bestRank: s.bestRank,
-    };
-    save(next);
-    set({ ...next, justUnlockedStage: target });
+    set((s) => {
+      const isFinal = index >= STAGE_COUNT - 1;
+      const target = clampStage(index + 1);
+      const unlocks = target > s.unlockedStage; // a new page becomes reachable
+      const marksComplete = isFinal && !s.questComplete; // finishing the last page
+      if (!unlocks && !marksComplete) return s; // nothing changed — don't re-celebrate
+      const next: Persisted = {
+        version: STORAGE_VERSION,
+        overall: s.overall,
+        bests: s.bests,
+        contributions: s.contributions,
+        unlockedStage: Math.max(s.unlockedStage, target),
+        bestRank: s.bestRank,
+        questComplete: s.questComplete || marksComplete,
+      };
+      save(next);
+      // Only toast a NEW page unlock; finishing the final page has none to show.
+      return { ...next, justUnlockedStage: unlocks ? target : s.justUnlockedStage };
+    });
   },
 
   clearJustUnlocked: () => set({ justUnlockedStage: null }),

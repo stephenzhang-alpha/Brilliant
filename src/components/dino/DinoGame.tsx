@@ -93,6 +93,10 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
   // of 300-500 points after each), and how many have fired this run.
   const nextCheckRef = useRef(0);
   const checkCountRef = useRef(0);
+  // Reinforcement dialog focus management: the modal element to trap focus in,
+  // and the control that had focus before it opened (restored on close).
+  const reinforceDialogRef = useRef<HTMLDivElement | null>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     getDeathOfferRef.current = getDeathOffer;
@@ -174,9 +178,20 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
       const el = document.activeElement;
       return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
     };
+    // Focus sitting on a button/link (e.g. the game-over "Play again" button)
+    // means that control owns Space/Enter — the global jump key must stand down
+    // so it doesn't fire alongside the control's own activation and restart or
+    // navigate twice (double-trigger).
+    const isOnControl = () => {
+      const el = document.activeElement as HTMLElement | null;
+      return (
+        !!el &&
+        (el.tagName === 'BUTTON' || el.tagName === 'A' || el.getAttribute('role') === 'button')
+      );
+    };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTyping() || !activeRef.current) return;
+      if (isTyping() || isOnControl() || !activeRef.current) return;
       // While a reinforcement question owns the screen, controls are inert.
       if (reinforceRef.current) return;
       if (isJumpEvent(e)) {
@@ -224,6 +239,54 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
       nextCheckRef.current = eng.score + randInt(300, 500);
     }
   }, []);
+
+  // Accessibility: trap focus within the reinforcement dialog while it is open.
+  // Move focus into it on open, keep Tab / Shift+Tab cycling inside it, and
+  // restore focus to the previously focused control when it closes.
+  useEffect(() => {
+    if (!reinforce) return;
+    const dialog = reinforceDialogRef.current;
+    if (!dialog) return;
+
+    lastFocusedRef.current = document.activeElement as HTMLElement | null;
+
+    const focusable = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement);
+
+    // Move focus into the dialog: its first focusable control, else the dialog.
+    (focusable()[0] ?? dialog).focus();
+
+    const onTrapKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const items = focusable();
+      const first = items[0] ?? dialog;
+      const last = items[items.length - 1] ?? dialog;
+      const active = document.activeElement;
+      // Focus escaped the dialog (e.g. a control unmounted) — pull it back in.
+      if (!active || !dialog.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey) {
+        if (active === first || active === dialog) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onTrapKeyDown, true);
+
+    return () => {
+      document.removeEventListener('keydown', onTrapKeyDown, true);
+      lastFocusedRef.current?.focus?.();
+    };
+  }, [reinforce]);
 
   return (
     <div className="w-full">
@@ -308,6 +371,8 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
           Correct answer resumes; wrong answers just nudge and let them retry. */}
       {reinforce && (
         <div
+          ref={reinforceDialogRef}
+          tabIndex={-1}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-fadein"
           role="dialog"
           aria-modal="true"

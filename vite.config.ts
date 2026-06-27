@@ -1,24 +1,11 @@
 import { defineConfig } from 'vite'
-import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// GitHub Pages serves project sites from https://<user>.github.io/<repo>/, so the
-// production build needs base = '/<repo>/'. Dev server stays at '/'.
-// Override with the VITE_BASE env var if you rename the repo or add a custom domain.
-//
-// This is a multi-page build of two independent apps that share auth + styles:
-//   index.html        -> Project Equation (interactive Algebra course)
-//   games/index.html  -> Algebra Quest arcade (Dino / Gates / Tower)
+// Algebra Quest is a single-page app (HashRouter) served at the site root.
+// `base` defaults to '/'; override with the VITE_BASE env var for sub-path hosting
+// (e.g. VITE_BASE=/Brilliant/ for a GitHub Pages project site).
 export default defineConfig(({ command }) => ({
-  base: command === 'build' ? process.env.VITE_BASE ?? '/Brilliant/' : '/',
+  base: command === 'build' ? process.env.VITE_BASE ?? '/' : '/',
   plugins: [react(), tailwindcss()],
-  build: {
-    rollupOptions: {
-      input: {
-        main: fileURLToPath(new URL('index.html', import.meta.url)),
-        games: fileURLToPath(new URL('games/index.html', import.meta.url)),
-      },
-    },
-  },
 }))

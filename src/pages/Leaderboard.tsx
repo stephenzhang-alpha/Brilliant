@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useScoresStore, GameUser } from '../stores/scoresStore';
+import { useOverallStore, rankInfo } from '../stores/overallStore';
 import { isFirebaseConfigured } from '../firebase/config';
 
 function medal(rank: number): string {
@@ -12,6 +13,8 @@ export function LeaderboardPage() {
   const { user } = useAuthStore();
   const { best, leaderboard, leaderboardLoading, leaderboardError, loadLeaderboard, playerName, setPlayerName } =
     useScoresStore();
+  const overall = useOverallStore((s) => s.overall);
+  const info = rankInfo(overall);
 
   const gameUser: GameUser | null = user
     ? { uid: user.uid, email: 'email' in user ? user.email : null }
@@ -42,8 +45,49 @@ export function LeaderboardPage() {
         </Link>
       </div>
 
+      {/* The player's overall quest standing — the same total the nav chip shows. */}
+      <div className="bg-surface shadow-sm border border-black/10 rounded-xl px-5 py-4 mb-4">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden
+            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl text-2xl"
+            style={{
+              background: `${info.rank.color}22`,
+              boxShadow: `inset 0 0 0 2px ${info.rank.color}55`,
+            }}
+          >
+            {info.rank.icon}
+          </span>
+          <div className="min-w-0">
+            <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-text-muted">
+              Your total score
+            </p>
+            <p
+              className="font-display text-lg font-extrabold leading-tight"
+              style={{ color: info.rank.color }}
+            >
+              {info.rank.name}
+            </p>
+          </div>
+          <span className="ml-auto font-display text-2xl font-extrabold tabular-nums text-primary">
+            {overall.toLocaleString()}
+          </span>
+        </div>
+        <p className="mt-2 text-xs text-text-muted">
+          {info.next ? (
+            <>
+              <span className="font-bold text-text">{info.toNext.toLocaleString()}</span> pts to{' '}
+              {info.next.icon} {info.next.name}
+            </>
+          ) : (
+            'Top rank reached — Algebra Legend! 🏆'
+          )}{' '}
+          · the sum of your best runs across the quest
+        </p>
+      </div>
+
       <div className="bg-surface shadow-sm border border-black/10 rounded-xl px-5 py-4 mb-4 flex items-center justify-between">
-        <span className="text-text-muted">Your personal best</span>
+        <span className="text-text-muted">Your best Dino run</span>
         <span className="text-2xl font-extrabold text-primary-light tabular-nums">
           {best.toLocaleString()}
         </span>
@@ -107,6 +151,9 @@ export function LeaderboardPage() {
 
       {isFirebaseConfigured && user && (
         <>
+          <h2 className="mb-2 text-sm font-bold uppercase tracking-wider text-text-muted">
+            🦖 Dino Runner — global high scores
+          </h2>
           {leaderboardLoading && (
             <div className="flex justify-center py-10">
               <div className="w-7 h-7 border-4 border-primary-light border-t-transparent rounded-full animate-spin" />

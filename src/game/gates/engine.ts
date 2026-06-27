@@ -755,9 +755,10 @@ export class GateRunner {
   }
 
   /**
-   * Record the player's own evaluation of a·x + b. The correct value becomes the
-   * score either way (gentle — no harsh penalty); returns whether the pick was
-   * right so the UI can celebrate or show the worked steps.
+   * Record the player's own evaluation of a·x + b. A correct answer turns your
+   * expression into that crowd (the score); a wrong one earns no crowd, so the
+   * boss wipes you out. Returns whether the pick was right so the UI can
+   * celebrate or show the worked steps.
    */
   submitEvaluation(value: number): boolean {
     if (this.phase !== 'eval' || this.evalAnswered) return this.evalCorrect;
@@ -765,7 +766,9 @@ export class GateRunner {
     this.evalAnswered = true;
     this.evalPicked = value;
     this.evalCorrect = correct;
-    this.count = Math.max(0, this.evalAnswer);
+    // Only a correct evaluation materialises the crowd; a wrong answer credits
+    // nothing, leaving you to be wiped out by the boss (a loss you can retry).
+    this.count = correct ? Math.max(0, this.evalAnswer) : 0;
     this.evaluated = true;
 
     // Size the final boss to the crowd you actually built: a flat hit plus a
