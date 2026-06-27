@@ -20,19 +20,31 @@ interface MagicAssistantProps {
   name?: string;
 }
 
+/** Sparkles that gently bob around Pip while it hovers. */
 const SPARKLES = [
-  { ch: '✨', top: '-6%', left: '4%', delay: '0s', size: 'text-lg' },
-  { ch: '⭐', top: '8%', left: '78%', delay: '0.4s', size: 'text-sm' },
-  { ch: '✨', top: '64%', left: '-4%', delay: '0.8s', size: 'text-base' },
-  { ch: '💫', top: '78%', left: '70%', delay: '0.2s', size: 'text-lg' },
+  { ch: '✨', top: '-8%', left: '2%', delay: '0s', size: 'text-lg' },
+  { ch: '⭐', top: '6%', left: '82%', delay: '0.4s', size: 'text-sm' },
+  { ch: '✨', top: '66%', left: '-8%', delay: '0.8s', size: 'text-base' },
+  { ch: '💫', top: '80%', left: '74%', delay: '0.2s', size: 'text-lg' },
+];
+
+/** Sparkles that fling outward from Pip's center in the one-shot arrival burst. */
+const BURST = [
+  { ch: '✨', top: '2%', left: '44%' },
+  { ch: '⭐', top: '40%', left: '90%' },
+  { ch: '💫', top: '84%', left: '42%' },
+  { ch: '✨', top: '44%', left: '2%' },
+  { ch: '⭐', top: '10%', left: '80%' },
+  { ch: '✨', top: '80%', left: '10%' },
 ];
 
 /**
- * "Pip", a magical star-spirit assistant that pops in (sparkles + glow) when a
- * student answers a concept check wrong, and — on request — gives an AI hint or
- * explanation (streamed, typing-effect). If the live AI (Firebase AI Logic) is
- * unavailable or errors, it gracefully shows the authored `fallback` instead, so
- * it always helps.
+ * "Pip", a magical star-spirit assistant. When a student answers a concept check
+ * wrong, Pip swoops in from the side (sparkle trail), bursts a ring of sparkles
+ * as it lands, then hovers — untethered, no box — beside a tailed speech bubble.
+ * On request it gives an AI hint or explanation (streamed, typing-effect). If the
+ * live AI (Firebase AI Logic) is unavailable or errors, it gracefully shows the
+ * authored `fallback` instead, so it always helps.
  */
 export function MagicAssistant({
   topic,
@@ -94,34 +106,49 @@ export function MagicAssistant({
   const pose = mode ? pipExplaining : pipIdle;
 
   return (
-    <div className="mt-4 animate-fadein">
-      <div className="flex items-start gap-3 rounded-2xl border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-accent/5 p-3 sm:p-4">
-        {/* Mascot with glow + sparkles */}
-        <div className="relative shrink-0">
-          <div
-            aria-hidden
-            className="animate-glow absolute inset-0 -z-0 rounded-full bg-gradient-to-br from-primary/50 via-accent/40 to-cyan/40 blur-xl"
-          />
-          <img
-            src={pose}
-            alt={`${name}, your magical helper`}
-            className="animate-bob relative z-10 h-20 w-20 select-none object-contain sm:h-24 sm:w-24"
-            draggable={false}
-          />
-          {SPARKLES.map((s, i) => (
-            <span
-              key={i}
-              aria-hidden
-              className={`animate-bob pointer-events-none absolute z-20 ${s.size}`}
-              style={{ top: s.top, left: s.left, animationDelay: s.delay }}
-            >
-              {s.ch}
+    <div className="mt-5 flex items-start gap-2 sm:gap-3">
+      {/* Pip — a free-floating character that swoops in and hovers (no box) */}
+      <div className="animate-pip-fly relative shrink-0">
+        {/* magical glow */}
+        <div
+          aria-hidden
+          className="animate-glow absolute inset-1 z-0 rounded-full bg-gradient-to-br from-primary/55 via-accent/40 to-cyan/40 blur-2xl"
+        />
+        {/* one-shot sparkle burst on arrival (hidden at rest) */}
+        <div aria-hidden className="animate-pip-burst pointer-events-none absolute inset-0 z-20 opacity-0">
+          {BURST.map((b, i) => (
+            <span key={i} className="absolute text-sm" style={{ top: b.top, left: b.left }}>
+              {b.ch}
             </span>
           ))}
         </div>
+        <img
+          src={pose}
+          alt={`${name}, your magical helper`}
+          className="animate-bob relative z-10 h-24 w-24 select-none object-contain drop-shadow-[0_10px_18px_rgba(124,58,237,0.35)] sm:h-28 sm:w-28"
+          style={{ animationDelay: '0.72s' }}
+          draggable={false}
+        />
+        {/* ambient floating sparkles */}
+        {SPARKLES.map((s, i) => (
+          <span
+            key={i}
+            aria-hidden
+            className={`animate-bob pointer-events-none absolute z-20 ${s.size}`}
+            style={{ top: s.top, left: s.left, animationDelay: s.delay }}
+          >
+            {s.ch}
+          </span>
+        ))}
+      </div>
 
-        {/* Speech bubble */}
-        <div className="min-w-0 flex-1">
+      {/* Speech bubble — unboxed, with a little tail pointing back at Pip */}
+      <div className="animate-bubble-in relative mt-2 min-w-0 flex-1">
+        <div
+          aria-hidden
+          className="absolute -left-1.5 top-5 h-3.5 w-3.5 rotate-45 rounded-[3px] bg-surface shadow-[-2px_2px_3px_rgba(124,58,237,0.06)]"
+        />
+        <div className="relative rounded-2xl bg-surface p-3 shadow-xl ring-1 ring-primary/15 sm:p-3.5">
           {mode === null ? (
             <>
               <p className="text-sm font-semibold text-text">

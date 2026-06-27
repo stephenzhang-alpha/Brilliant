@@ -314,7 +314,7 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
           aria-labelledby="dino-reinforce-title"
         >
           <div className="absolute inset-0 bg-[#160f38]/85 backdrop-blur-2xl" aria-hidden />
-          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface shadow-2xl shadow-primary/40 ring-1 ring-white/50">
+          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-3xl bg-surface shadow-2xl shadow-primary/40 ring-1 ring-white/50">
             <div className="flex items-center gap-3 bg-gradient-to-r from-primary via-accent to-cyan px-5 py-4 sm:px-6">
               <span
                 className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20 text-2xl animate-bob"
