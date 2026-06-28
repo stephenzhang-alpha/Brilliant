@@ -1,4 +1,5 @@
 import type { QuizOption } from '../components/quiz/ConceptCheck';
+import type { AnswerMeta } from '../firebase/ai';
 
 /** A single multiple-choice concept check (question + shuffled-ish options). */
 export interface Quiz {
@@ -8,6 +9,12 @@ export interface Quiz {
   options: QuizOption[];
   /** Preferred option grid width. */
   columns?: 2 | 3;
+  /**
+   * Optional data-driven ground truth for computable items, threaded to the
+   * assistant's deterministic verifier so it checks AI guidance against data
+   * (operands + intermediate + final results) instead of parsed prose.
+   */
+  answer?: AnswerMeta;
 }
 
 /**
@@ -74,6 +81,7 @@ export const VARIABLE_QUESTIONS: Quiz[] = [
     question: 'If n = 10, what is n + 3?',
     prompt: 'Here the variable n stands for the number 10.',
     columns: 3,
+    answer: { value: '13', allowedNumbers: [10, 3, 13] },
     options: [
       { id: '13', label: '13', correct: true },
       {
@@ -148,6 +156,7 @@ export const EXPRESSION_QUESTIONS: Quiz[] = [
     question: 'Evaluate 3x + 2 when x = 4.',
     prompt: 'Multiply first, then add.',
     columns: 2,
+    answer: { value: '14', allowedNumbers: [3, 4, 2, 12, 14] },
     options: [
       { id: '14', label: '14', correct: true },
       {
@@ -200,6 +209,7 @@ export const EXPRESSION_QUESTIONS: Quiz[] = [
     id: 'combine-like-terms',
     question: 'Combine like terms: 3x + 2x = ?',
     columns: 2,
+    answer: { value: '5x', allowedNumbers: [3, 2, 5] },
     options: [
       { id: '5x', label: '5x', hint: '3 x-es plus 2 x-es', correct: true },
       {
@@ -277,6 +287,7 @@ export const EQUATION_QUESTIONS: Quiz[] = [
     question: 'Balance it: x + 3 = 7. What is x?',
     prompt: 'What value of x makes both sides weigh the same?',
     columns: 3,
+    answer: { value: '4', allowedNumbers: [3, 7, 4] },
     options: [
       { id: '4', label: '4', hint: '4 + 3 = 7', correct: true },
       {
@@ -320,3 +331,20 @@ export const EQUATION_QUESTIONS: Quiz[] = [
     ],
   },
 ];
+
+/**
+ * Answer metadata indexed by question text, so the deterministic verifier gets
+ * data-driven ground truth even for the gates whose pages pass `ConceptCheck`
+ * props individually (rather than spreading the whole `Quiz`). Built once from
+ * every bank; only computable questions carry an `answer`, so most lookups
+ * return `undefined` (the verifier then relies on its other sources).
+ */
+const ANSWER_META_BY_QUESTION = new Map<string, AnswerMeta>();
+for (const q of [...VARIABLE_QUESTIONS, ...EXPRESSION_QUESTIONS, ...EQUATION_QUESTIONS]) {
+  if (q.answer) ANSWER_META_BY_QUESTION.set(q.question, q.answer);
+}
+
+/** Look up the (optional) answer metadata for a question by its exact text. */
+export function answerMetaForQuestion(question: string): AnswerMeta | undefined {
+  return ANSWER_META_BY_QUESTION.get(question);
+}

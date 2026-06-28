@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MagicAssistant } from '../assistant/MagicAssistant';
+import { answerMetaForQuestion } from '../../content/quizQuestions';
 
 export interface QuizOption {
   id: string;
@@ -130,6 +131,7 @@ export function ConceptCheck({
           userPickLabel={wrongOption.label}
           correctLabel={options.find((o) => o.correct)?.label ?? ''}
           fallback={wrongOption.feedback}
+          answer={answerMetaForQuestion(question)}
           name={assistantName}
         />
       )}

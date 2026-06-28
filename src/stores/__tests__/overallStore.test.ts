@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { coercePersisted, rankInfo, RANKS, STAGE_COUNT } from '../overallStore';
+import {
+  coercePersisted,
+  mergeProgress,
+  rankInfo,
+  RANKS,
+  STAGE_COUNT,
+  type Persisted,
+} from '../overallStore';
 
 describe('rankInfo', () => {
   it('starts at Rookie with progress toward the next rank', () => {
@@ -67,5 +74,68 @@ describe('coercePersisted (save migration)', () => {
     const p = coercePersisted({ bests: { dino: -10, gates: NaN, tower: 7 } });
     expect(p.bests).toEqual({ dino: 0, gates: 0, tower: 7 });
     expect(p.overall).toBe(7);
+  });
+});
+
+describe('mergeProgress (cross-device merge)', () => {
+  /** Build a normalized Persisted (bestRank already at/above its floor). */
+  function mk(over: {
+    bests?: Partial<Record<'dino' | 'gates' | 'tower', number>>;
+    unlockedStage?: number;
+    bestRank?: number;
+    questComplete?: boolean;
+  }): Persisted {
+    const bests = { dino: 0, gates: 0, tower: 0, ...(over.bests ?? {}) };
+    const overall = bests.dino + bests.gates + bests.tower;
+    return {
+      version: 4,
+      overall,
+      bests,
+      contributions: { ...bests },
+      unlockedStage: over.unlockedStage ?? 0,
+      bestRank: over.bestRank ?? 0,
+      questComplete: over.questComplete ?? false,
+    };
+  }
+
+  it('is commutative', () => {
+    const a = mk({ bests: { dino: 100, tower: 5 }, unlockedStage: 3, questComplete: false });
+    const b = mk({ bests: { gates: 200 }, unlockedStage: 1, questComplete: true });
+    expect(mergeProgress(a, b)).toEqual(mergeProgress(b, a));
+  });
+
+  it('is idempotent on a normalized save', () => {
+    const a = mk({ bests: { dino: 100, gates: 50 }, unlockedStage: 2 });
+    expect(mergeProgress(a, a)).toEqual(a);
+  });
+
+  it('takes field-wise max / OR and recomputes overall', () => {
+    const a = mk({ bests: { dino: 100, gates: 0, tower: 5 }, unlockedStage: 4, questComplete: false });
+    const b = mk({ bests: { dino: 80, gates: 90, tower: 5 }, unlockedStage: 2, questComplete: true });
+    const m = mergeProgress(a, b);
+    expect(m.bests).toEqual({ dino: 100, gates: 90, tower: 5 });
+    expect(m.overall).toBe(195);
+    expect(m.unlockedStage).toBe(4); // furthest wins
+    expect(m.questComplete).toBe(true); // OR
+    expect(m.contributions).toEqual(m.bests); // mirror invariant
+  });
+
+  it('never lets bestRank fall below the rank the merged overall earns', () => {
+    const a = mk({ bests: { dino: 800 }, bestRank: 0 }); // 800 -> Pro
+    const m = mergeProgress(a, a);
+    expect(m.bestRank).toBe(rankInfo(800).index);
+    expect(m.bestRank).toBeGreaterThanOrEqual(2);
+  });
+
+  it('survives garbage remote data via coercePersisted', () => {
+    const local = mk({ bests: { dino: 120 }, unlockedStage: 3, questComplete: true });
+    const remote = coercePersisted({
+      bests: { dino: 'oops', gates: -5, tower: NaN },
+      unlockedStage: 999,
+    });
+    const m = mergeProgress(local, remote);
+    expect(m.bests.dino).toBe(120); // local wins over garbage
+    expect(m.unlockedStage).toBe(STAGE_COUNT - 1); // remote 999 clamped to 6, then wins
+    expect(m.questComplete).toBe(true);
   });
 });

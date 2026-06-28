@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import pipIdle from '../../assets/assistant/pip-idle.png';
-import pipExplaining from '../../assets/assistant/pip-explaining.png';
-import { isAssistantAvailable, streamQuestionHelp } from '../../firebase/ai';
+import pipIdle from '../../assets/assistant/pip-idle.webp';
+import pipExplaining from '../../assets/assistant/pip-explaining.webp';
+import { isAssistantAvailable, generateQuestionHelp, type AnswerMeta } from '../../firebase/ai';
 import { useAssistantStore } from '../../stores/assistantStore';
 
 interface MagicAssistantProps {
@@ -20,6 +20,8 @@ interface MagicAssistantProps {
    * (deterministic), and used to ground the optional AI re-explanation.
    */
   fallback?: string;
+  /** Optional data-driven ground truth, forwarded to the AI verifier. */
+  answer?: AnswerMeta;
   /** Mascot name. */
   name?: string;
 }
@@ -63,6 +65,7 @@ export function MagicAssistant({
   userPickLabel,
   correctLabel,
   fallback,
+  answer,
   name = 'Pip',
 }: MagicAssistantProps) {
   const authored =
@@ -74,10 +77,10 @@ export function MagicAssistant({
   const [aiText, setAiText] = useState('');
 
   // Each request gets an id so a newer request supersedes an older in-flight
-  // stream's late updates. The student can also answer correctly mid-stream,
-  // which unmounts us (we only render for a wrong pick) — so track mount state
-  // and abort the Gemini stream on unmount instead of burning tokens / setting
-  // state on an unmounted component.
+  // one's late update. The student can also answer correctly mid-request, which
+  // unmounts us (we only render for a wrong pick) — so track mount state and
+  // abort the Gemini call on unmount instead of burning tokens / setting state
+  // on an unmounted component.
   const reqIdRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -94,6 +97,10 @@ export function MagicAssistant({
     };
   }, [enter, leave]);
 
+  // Validate-then-reveal: keep the "Pip is thinking…" shimmer up while we await
+  // the FULL, verified text — we never paint token-by-token unverified output.
+  // If generation or deterministic verification fails, we surface the graceful
+  // fallback note (the authored tip above always stands).
   const explainAnotherWay = async () => {
     const id = ++reqIdRef.current;
     abortRef.current?.abort();
@@ -103,14 +110,14 @@ export function MagicAssistant({
     setAiState('loading');
 
     try {
-      await streamQuestionHelp(
-        { topic, question, prompt, options, userPickLabel, correctLabel, authoredExplanation: authored },
-        (t) => {
-          if (mountedRef.current && id === reqIdRef.current) setAiText(t);
-        },
+      const validated = await generateQuestionHelp(
+        { topic, question, prompt, options, userPickLabel, correctLabel, authoredExplanation: authored, answer },
         controller.signal,
       );
-      if (mountedRef.current && id === reqIdRef.current) setAiState('done');
+      if (mountedRef.current && id === reqIdRef.current) {
+        setAiText(validated);
+        setAiState('done');
+      }
     } catch {
       if (mountedRef.current && id === reqIdRef.current) setAiState('error');
     }
@@ -181,7 +188,7 @@ export function MagicAssistant({
                   Hmm, I couldn&apos;t dream up another way just now — but the tip above still holds.
                   Give it another try! ✨
                 </p>
-              ) : aiState === 'loading' && !aiText ? (
+              ) : aiState === 'loading' ? (
                 <p className="mt-1 animate-pulse text-sm text-text-muted">
                   {name} is thinking of another way… ✨
                 </p>
@@ -191,7 +198,6 @@ export function MagicAssistant({
                   aria-live="polite"
                 >
                   {aiText}
-                  {aiState === 'loading' && <span className="ml-0.5 animate-pulse">▍</span>}
                 </p>
               )}
             </div>

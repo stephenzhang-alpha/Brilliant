@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -8,4 +9,11 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? process.env.VITE_BASE ?? '/' : '/',
   plugins: [react(), tailwindcss()],
+  // Vitest: jsdom so component tests (auth forms, MagicAssistant) can render;
+  // pure-logic tests (stores, verifyExplanation) run fine here too.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+  },
 }))

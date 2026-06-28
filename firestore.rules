@@ -4,20 +4,36 @@ rules_version = '2';
 // Assumed Data Model
 // ===============================================================
 //
-// Collection: userProgress
+// Collection: userProgress   (generic per-user progress — SHARED with other
+// apps on this Firebase project; owner-only, schema not constrained here so we
+// never break or clobber those apps).
 // Document ID: {userId} (the owner's auth uid)
-//   - Arbitrary per-user learning progress, readable/writable only by its owner.
 //
-// Collection: dinoScores   (Dino Runner global leaderboard)
-// Document ID: {userId} (the owner's auth uid — one best-score row per player)
+// Collection: algebraQuestProgress   (Algebra Quest's full cross-device save)
+// Document ID: {userId} (the owner's auth uid)
 // Fields:
-//   - uid: string (required, immutable, == document id) - owner uid
-//   - name: string (required, 1..20 chars) - public display handle (NOT an email)
-//   - score: number (required, 0..100000000) - the player's best score
-//   - updatedAt: timestamp (required) - when the best score was last written
+//   - uid: string (required, immutable, == document id)
+//   - version: number (required, 1..100) - persisted-schema version
+//   - bests: map {dino, gates, tower} (required, each number 0..100000000)
+//   - unlockedStage: number (required, 0..6 == STAGE_COUNT-1 in overallStore.ts)
+//   - bestRank: number (required, 0..4 == RANKS.length-1 in overallStore.ts)
+//   - questComplete: bool (required)
+//   - updatedAt: timestamp (required)
+// Readable/writable only by its owner.
 //
-// Reads of dinoScores require authentication (the leaderboard is shown to
-// signed-in players only), so no email or other PII is ever exposed publicly.
+// Collection: groups   (private group leaderboards)
+// Document ID: {code} (the 6-char join code IS the group id)
+// Fields: code(str==id), name(str 1..40), ownerUid(str==creator), createdAt(ts)
+//   - get (by code) allowed to any signed-in user so they can join; NO list
+//     (groups are not enumerable — possession of the code is the "verification").
+//   Subcollection: groups/{code}/members/{uid}   (the leaderboard rows)
+//   Fields: uid(str==id), name(str 1..20), score(num 0..1e8), joinedAt, updatedAt
+//     - readable only by members of that group; each user writes only their own row.
+//
+// Collection: userProfiles   (per-user, owner-only)
+// Document ID: {uid}
+// Fields: uid(str==id), name(str 1..20), groupCode(str 4..12 | null), updatedAt(ts)
+//   - the cross-device source of truth for "which group am I in" + display handle.
 // ===============================================================
 
 service cloud.firestore {
@@ -31,35 +47,126 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Strict validator for a leaderboard row. Used on BOTH create and update.
-    function isValidScore(data, userId) {
-      return data.keys().hasOnly(['uid', 'name', 'score', 'updatedAt']) &&
-        data.keys().hasAll(['uid', 'name', 'score', 'updatedAt']) &&
+    // Strict validator for an Algebra Quest progress save. Used on create + update.
+    // The numeric bounds 6 / 4 mirror STAGE_COUNT-1 / RANKS.length-1 in
+    // src/stores/overallStore.ts — keep them in sync if those change.
+    function isValidProgress(data, userId) {
+      return data.keys().hasOnly(['uid', 'version', 'bests', 'unlockedStage', 'bestRank', 'questComplete', 'updatedAt']) &&
+        data.keys().hasAll(['uid', 'version', 'bests', 'unlockedStage', 'bestRank', 'questComplete', 'updatedAt']) &&
         data.uid is string && data.uid == userId &&
-        data.name is string && data.name.size() >= 1 && data.name.size() <= 20 &&
-        data.score is number && data.score >= 0 && data.score <= 100000000 &&
+        data.version is int && data.version >= 1 && data.version <= 100 &&
+        data.bests is map &&
+        data.bests.keys().hasOnly(['dino', 'gates', 'tower']) &&
+        data.bests.keys().hasAll(['dino', 'gates', 'tower']) &&
+        data.bests.dino is number && data.bests.dino >= 0 && data.bests.dino <= 100000000 &&
+        data.bests.gates is number && data.bests.gates >= 0 && data.bests.gates <= 100000000 &&
+        data.bests.tower is number && data.bests.tower >= 0 && data.bests.tower <= 100000000 &&
+        data.unlockedStage is int && data.unlockedStage >= 0 && data.unlockedStage <= 6 &&
+        data.bestRank is int && data.bestRank >= 0 && data.bestRank <= 4 &&
+        data.questComplete is bool &&
         data.updatedAt is timestamp;
     }
 
-    // ----------------------- userProgress ----------------------------
+    // True when the requester already has a member row in group `code` — i.e. is
+    // a member, and may therefore read the group's roster (the leaderboard).
+    function isGroupMember(code) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/groups/$(code)/members/$(request.auth.uid));
+    }
+
+    // Validator for a group doc. ownerUid must be the creator; code == doc id.
+    function isValidGroup(data, code) {
+      return data.keys().hasOnly(['code', 'name', 'ownerUid', 'createdAt']) &&
+        data.keys().hasAll(['code', 'name', 'ownerUid', 'createdAt']) &&
+        data.code is string && data.code == code &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 40 &&
+        data.ownerUid is string && data.ownerUid == request.auth.uid &&
+        data.createdAt is timestamp;
+    }
+
+    // Validator for a member (leaderboard) row. uid == doc id == the writer.
+    function isValidMember(data, uid) {
+      return data.keys().hasOnly(['uid', 'name', 'score', 'joinedAt', 'updatedAt']) &&
+        data.keys().hasAll(['uid', 'name', 'score', 'joinedAt', 'updatedAt']) &&
+        data.uid is string && data.uid == uid &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 20 &&
+        data.score is number && data.score >= 0 && data.score <= 100000000 &&
+        data.joinedAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    // Validator for a per-user profile. groupCode may be null (not in a group).
+    function isValidProfile(data, uid) {
+      return data.keys().hasOnly(['uid', 'name', 'groupCode', 'updatedAt']) &&
+        data.keys().hasAll(['uid', 'name', 'groupCode', 'updatedAt']) &&
+        data.uid is string && data.uid == uid &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 20 &&
+        (data.groupCode == null ||
+          (data.groupCode is string && data.groupCode.size() >= 4 && data.groupCode.size() <= 12)) &&
+        data.updatedAt is timestamp;
+    }
+
+    // ----------------------- userProgress (shared, other apps) -------
+    // Generic per-user progress used by OTHER apps on this project. Keep the
+    // original owner-only rule so this change never breaks or constrains them;
+    // Algebra Quest does NOT write here (it uses algebraQuestProgress below).
     match /userProgress/{userId} {
       allow read, write: if isOwner(userId);
     }
 
-    // ----------------------- dinoScores (leaderboard) ----------------
-    match /dinoScores/{userId} {
-      // Signed-in players can read the leaderboard.
-      allow read: if isAuthenticated();
+    // ----------------------- algebraQuestProgress --------------------
+    match /algebraQuestProgress/{userId} {
+      // Only the owner can read their save.
+      allow read: if isOwner(userId);
 
-      // A player may only create their own row, fully validated.
-      allow create: if isOwner(userId) && isValidScore(request.resource.data, userId);
+      // Create / update must be the owner and fully valid.
+      allow create: if isOwner(userId) && isValidProgress(request.resource.data, userId);
 
-      // Updates must stay valid and may never change the owning uid.
+      // Updates stay valid and may never change the owning uid.
       allow update: if isOwner(userId) &&
-        isValidScore(request.resource.data, userId) &&
+        isValidProgress(request.resource.data, userId) &&
         request.resource.data.uid == resource.data.uid;
 
-      // Scores are permanent on the leaderboard.
+      // No client deletes (account teardown is handled elsewhere).
+      allow delete: if false;
+    }
+
+    // ----------------------- groups (private group leaderboards) -----
+    match /groups/{code} {
+      // Any signed-in user can fetch a single group BY ITS CODE (to join), but
+      // groups are not enumerable — knowing the code is the verification.
+      allow get: if isAuthenticated();
+      allow list: if false;
+
+      // Create a group you own; updates (e.g. rename) and deletes are owner-only.
+      allow create: if isAuthenticated() && isValidGroup(request.resource.data, code);
+      allow update: if isAuthenticated() &&
+        resource.data.ownerUid == request.auth.uid &&
+        isValidGroup(request.resource.data, code) &&
+        request.resource.data.ownerUid == resource.data.ownerUid;
+      // Client deletes are disabled: removing the group doc would orphan its
+      // members subcollection as a still-readable "ghost" roster (membership is
+      // checked by the member row, not the parent). A future "delete group"
+      // feature must pair with a Cloud Function that recursively deletes members.
+      allow delete: if false;
+
+      // Roster rows = the leaderboard. Readable by members of the group; each
+      // user creates/updates/deletes ONLY their own row.
+      match /members/{uid} {
+        allow read: if isAuthenticated() && (request.auth.uid == uid || isGroupMember(code));
+        allow create: if isAuthenticated() && request.auth.uid == uid &&
+          isValidMember(request.resource.data, uid) &&
+          exists(/databases/$(database)/documents/groups/$(code));
+        allow update: if isAuthenticated() && request.auth.uid == uid &&
+          isValidMember(request.resource.data, uid) &&
+          request.resource.data.uid == resource.data.uid;
+        allow delete: if isAuthenticated() && request.auth.uid == uid;
+      }
+    }
+
+    // ----------------------- userProfiles (owner-only) ---------------
+    match /userProfiles/{uid} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isValidProfile(request.resource.data, uid);
       allow delete: if false;
     }
 

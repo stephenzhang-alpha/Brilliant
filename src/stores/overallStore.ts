@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db, isFirebaseConfigured } from '../firebase/config';
+import type { GameUser } from '../lib/gameUser';
 
 /**
  * The single "overall score" + progression that ties the Algebra Quest pages
@@ -35,8 +38,22 @@ import { create } from 'zustand';
  */
 
 const KEY = 'algebra_overall_score';
+/**
+ * Which uid the local save (`KEY`) currently belongs to. Guards against
+ * cross-account contamination on shared devices: local progress is only folded
+ * up into an account that owns it (or an unclaimed fresh-guest save).
+ */
+const OWNER_KEY = 'algebra_overall_owner';
 /** Persisted-schema version. Bump + migrate in `coercePersisted` — never silently wipe saves. */
 const STORAGE_VERSION = 4;
+
+/**
+ * Firestore collection holding each player's full cross-device progress save.
+ * App-scoped (NOT the generic `userProgress`, which is shared with other apps on
+ * this Firebase project) so Algebra Quest's save can't collide with or clobber
+ * another app's per-user document.
+ */
+export const PROGRESS_COLLECTION = 'algebraQuestProgress';
 
 /** Number of quest pages; `unlockedStage` is clamped to [0, STAGE_COUNT - 1]. */
 export const STAGE_COUNT = 7;
@@ -113,7 +130,7 @@ export function rankInfo(overall: number): RankInfo {
   return { index, rank, next, floor, ceil, into, span, toNext, progress, isMax: !next };
 }
 
-interface Persisted {
+export interface Persisted {
   /** Schema version of this saved blob (for migrations). */
   version: number;
   overall: number;
@@ -163,6 +180,20 @@ interface OverallState extends Persisted {
   clearJustUnlocked: () => void;
   clearRankUp: () => void;
   reset: () => void;
+  /**
+   * Hydrate + reconcile this store with the cloud for the signed-in `user`
+   * (cross-device sync): read `userProgress/{uid}`, max/OR-merge it with local
+   * state, apply the result, and push it back so guest progress reaches the
+   * cloud. A `null` user (guest / no Firebase) keeps progress local-only. The
+   * live subscription that follows is owned by `startProgressSync`.
+   */
+  init: (user: GameUser | null) => Promise<void>;
+  /**
+   * Apply a cloud/merged snapshot to local state + localStorage SILENTLY (no
+   * rank-up / unlock celebrations). Used by the sync layer when a remote device
+   * advances progress.
+   */
+  applyCloud: (p: Persisted) => void;
 }
 
 /** A fresh zeroed save (new nested objects each call — never share references). */
@@ -242,6 +273,51 @@ export function coercePersisted(parsed: unknown): Persisted {
   }
 }
 
+/**
+ * Merge two progress saves into one — a pure max/OR lattice join. Every field is
+ * monotonic (bests/stage/rank only ever rise; questComplete only flips true), so
+ * this is commutative, associative, and idempotent: concurrent multi-device
+ * writes converge to the same result regardless of order, and re-applying a
+ * device's own echoed write is a no-op. `bestRank` is floored to the rank the
+ * merged overall qualifies for, so a stale `bestRank` can never demote a player.
+ */
+export function mergeProgress(a: Persisted, b: Persisted): Persisted {
+  const bests: Record<ScoreSource, number> = {
+    dino: Math.max(a.bests.dino, b.bests.dino),
+    gates: Math.max(a.bests.gates, b.bests.gates),
+    tower: Math.max(a.bests.tower, b.bests.tower),
+  };
+  const overall = bests.dino + bests.gates + bests.tower;
+  return {
+    version: STORAGE_VERSION,
+    overall,
+    bests,
+    contributions: { ...bests },
+    unlockedStage: Math.max(a.unlockedStage, b.unlockedStage),
+    bestRank: Math.max(a.bestRank, b.bestRank, rankIndexFor(overall)),
+    questComplete: a.questComplete || b.questComplete,
+  };
+}
+
+/**
+ * Project a save into the Firestore `userProgress/{uid}` document shape. `uid`
+ * (== doc id) is immutable; `overall`/`contributions` are intentionally dropped
+ * (always recomputed from `bests` on read) so the stored doc can't go
+ * inconsistent. `updatedAt` is a server timestamp. Must match `isValidProgress`
+ * in firestore.rules.
+ */
+export function toCloudDoc(p: Persisted, uid: string) {
+  return {
+    uid,
+    version: p.version,
+    bests: { dino: p.bests.dino, gates: p.bests.gates, tower: p.bests.tower },
+    unlockedStage: p.unlockedStage,
+    bestRank: p.bestRank,
+    questComplete: p.questComplete,
+    updatedAt: serverTimestamp(),
+  };
+}
+
 function load(): Persisted {
   try {
     const raw = localStorage.getItem(KEY);
@@ -262,7 +338,7 @@ function save(p: Persisted) {
 
 const initial = load();
 
-export const useOverallStore = create<OverallState>((set) => ({
+export const useOverallStore = create<OverallState>((set, get) => ({
   version: initial.version,
   overall: initial.overall,
   bests: initial.bests,
@@ -338,5 +414,53 @@ export const useOverallStore = create<OverallState>((set) => ({
     const empty = emptyPersisted();
     save(empty);
     set({ ...empty, lastGain: null, justUnlockedStage: null, justRankedUp: null, sessionGain: 0 });
+  },
+
+  // One-time reconcile on sign-in: read the cloud save, max/OR-merge it with the
+  // local state, apply the result, and push the merge back so guest/local-only
+  // progress reaches the cloud. The live subscription is started separately by
+  // `startProgressSync`. Best-effort: offline / undeployed rules just leave the
+  // already-applied local state in place.
+  //
+  // Shared-device safety: the local save is only folded UP into the account when
+  // it is unclaimed (a fresh guest) or already owned by this uid (same account,
+  // or an anonymous guest that upgraded in place via account linking, which keeps
+  // the uid). When a DIFFERENT account signs in, we drop this device's local save
+  // FIRST — synchronously, before the live sync subscribes — so one player's
+  // progress can never be merged into or exposed under another's account.
+  init: async (user) => {
+    if (!user || !isFirebaseConfigured || !db) return; // guest / no Firebase: local-only
+    const localOwner = localStorage.getItem(OWNER_KEY);
+    const canMergeLocal = localOwner === null || localOwner === user.uid;
+    if (!canMergeLocal) get().applyCloud(emptyPersisted());
+    try {
+      localStorage.setItem(OWNER_KEY, user.uid);
+    } catch {
+      // best-effort ownership tag
+    }
+    try {
+      const ref = doc(db, PROGRESS_COLLECTION, user.uid);
+      const snap = await getDoc(ref);
+      const remote = snap.exists() ? coercePersisted(snap.data()) : emptyPersisted();
+      // get() is the empty save now if the previous owner was different.
+      const merged = mergeProgress(get(), remote);
+      get().applyCloud(merged);
+      await setDoc(ref, toCloudDoc(merged, user.uid));
+    } catch {
+      // offline / rules not deployed yet — local (claimed) state already stands
+    }
+  },
+
+  applyCloud: (p) => {
+    save(p);
+    set({
+      version: p.version,
+      overall: p.overall,
+      bests: p.bests,
+      contributions: p.contributions,
+      unlockedStage: p.unlockedStage,
+      bestRank: p.bestRank,
+      questComplete: p.questComplete,
+    });
   },
 }));

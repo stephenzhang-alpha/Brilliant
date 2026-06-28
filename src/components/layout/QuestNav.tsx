@@ -3,9 +3,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { useOverallStore } from '../../stores/overallStore';
 import { STAGES } from '../../quest/stages';
 import { ScoreChip } from '../score/ScoreChip';
-import { LEADERBOARD_ENABLED } from '../../config/features';
+import { AUTH_ENABLED, LEADERBOARD_ENABLED } from '../../config/features';
 import { useAssistantStore } from '../../stores/assistantStore';
-import pipIdle from '../../assets/assistant/pip-idle.png';
+import pipIdle from '../../assets/assistant/pip-idle.webp';
 
 /**
  * The slim quest top-bar shown on every page. It renders the seven stages as a
@@ -104,21 +104,38 @@ export function QuestNav() {
           ) : (
             <ScoreChip className="shrink-0" />
           )}
-          {LEADERBOARD_ENABLED &&
-            (user ? (
-              <button
-                onClick={() => void signOut()}
-                className="text-text-muted hover:text-text text-xs sm:text-sm whitespace-nowrap"
-              >
-                Sign out
-              </button>
+          {AUTH_ENABLED &&
+            (user && !user.isAnonymous ? (
+              <>
+                <Link
+                  to="/account"
+                  title="Your account"
+                  className="text-text-muted hover:text-text text-xs sm:text-sm whitespace-nowrap"
+                >
+                  Account
+                </Link>
+                <button
+                  onClick={() => void signOut()}
+                  className="text-text-muted hover:text-text text-xs sm:text-sm whitespace-nowrap"
+                >
+                  Sign out
+                </button>
+              </>
             ) : (
-              <Link
-                to="/signup"
-                className="btn-pop bg-primary text-white text-xs sm:text-sm font-display font-bold rounded-xl px-3 py-1.5 whitespace-nowrap"
-              >
-                Sign up
-              </Link>
+              <>
+                <Link
+                  to="/login"
+                  className="hidden sm:inline-block text-text-muted hover:text-text text-xs sm:text-sm whitespace-nowrap"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  to="/signup"
+                  className="btn-pop bg-primary text-white text-xs sm:text-sm font-display font-bold rounded-xl px-3 py-1.5 whitespace-nowrap"
+                >
+                  Sign up
+                </Link>
+              </>
             ))}
         </div>
       </div>

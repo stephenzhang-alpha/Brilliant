@@ -1,16 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { DinoGame as Engine, GameStatus } from '../../game/dino/engine';
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../../game/dino/constants';
-import { useAuthStore } from '../../stores/authStore';
-import { useScoresStore, GameUser } from '../../stores/scoresStore';
+import { useOverallStore } from '../../stores/overallStore';
 import { ConceptCheck } from '../quiz/ConceptCheck';
 import { VARIABLE_QUESTIONS, type Quiz } from '../../content/quizQuestions';
-
-function currentGameUser(): GameUser | null {
-  const u = useAuthStore.getState().user;
-  if (!u) return null;
-  return { uid: u.uid, email: 'email' in u ? u.email : null };
-}
 
 // Match on both `code` (physical key, layout-independent) and `key` (some
 // synthetic events / layouts only populate one of the two).
@@ -82,7 +75,9 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
   const [offer, setOffer] = useState<DeathOffer | null>(null);
   const [reinforce, setReinforce] = useState<Reinforcement | null>(null);
 
-  const best = useScoresStore((s) => s.best);
+  // The Dino HI counter reads the quest's canonical dino best (kept in sync
+  // across devices); scoresStore still owns the leaderboard submission.
+  const best = useOverallStore((s) => s.bests.dino);
 
   // Latest values readable from the stable game-over / input closures.
   const getDeathOfferRef = useRef(getDeathOffer);
@@ -123,14 +118,15 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
     ctx.imageSmoothingEnabled = false;
 
     const engine = new Engine();
-    engine.highScore = useScoresStore.getState().best;
+    engine.highScore = useOverallStore.getState().bests.dino;
     engineRef.current = engine;
 
     engine.onGameOver = (score) => {
-      const prevBest = useScoresStore.getState().best;
+      const prevBest = useOverallStore.getState().bests.dino;
       setLastScore(score);
       setIsNewBest(score > prevBest && score > 0);
-      void useScoresStore.getState().submitScore(score, currentGameUser());
+      // The run score feeds the single source of truth (overallStore.bests.dino)
+      // via onRunScore -> overallStore.add('dino', …), which also syncs to cloud.
       onRunScoreRef.current?.(score);
 
       setOffer(getDeathOfferRef.current?.() ?? null);
@@ -144,7 +140,7 @@ export function DinoGame({ getDeathOffer, onRunScore, active = true }: DinoGameP
       const dt = (now - last) / 1000;
       last = now;
       if (activeRef.current) {
-        engine.highScore = Math.max(engine.highScore, useScoresStore.getState().best);
+        engine.highScore = Math.max(engine.highScore, useOverallStore.getState().bests.dino);
         engine.update(dt);
         engine.draw(ctx);
         if (engine.status !== lastStatus) {
